@@ -46,6 +46,11 @@ public class TransformImageView extends AppCompatImageView {
 
     private float[] mInitialImageCorners;
     private float[] mInitialImageCenter;
+    private float[] mSavedImageMatrixValues;
+
+    private RectF mSavedCropRect;
+
+    private boolean mSavedStateExists = false;
 
     protected boolean mBitmapDecoded = false;
     protected boolean mBitmapLaidOut = false;
@@ -128,6 +133,40 @@ public class TransformImageView extends AppCompatImageView {
 
     public ExifInfo getExifInfo() {
         return mExifInfo;
+    }
+
+    /**
+     * @author azri92
+     * @param savedImageMatrixValues values for image {@link Matrix} from previous edit.
+     */
+    public void setSavedState(float[] savedImageMatrixValues, RectF cropRectValues) {
+        mSavedStateExists = true;
+        mSavedImageMatrixValues = savedImageMatrixValues;
+        mSavedCropRect = cropRectValues;
+    }
+
+    /**
+     * @author azri92
+     * @return true if data of last saved image exists.
+     */
+    public boolean savedImageStateExists() {
+        return mSavedStateExists;
+    }
+
+    /**
+     * @author azri92
+     * @return values for image {@link Matrix} from previous edit.
+     */
+    public float[] getSavedImageMatrixValues() {
+        return mSavedImageMatrixValues;
+    }
+
+    /**
+     * @author azri92
+     * @return crop rect from previous edit.
+     */
+    public RectF getSavedCropRect() {
+        return mSavedCropRect;
     }
 
     /**

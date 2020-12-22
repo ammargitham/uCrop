@@ -4,6 +4,7 @@ import android.annotation.TargetApi;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.PorterDuff;
+import android.graphics.RectF;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -48,8 +49,11 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     private static final String TAG = "SampleActivity";
 
+    public static final int RESULT_EDIT = 10001;
+
     private static final int REQUEST_SELECT_PICTURE = 0x01;
     private static final int REQUEST_SELECT_PICTURE_FOR_FRAGMENT = 0x02;
+    private static final int REQUEST_VIEW_EDIT = 0x03;
     private static final String SAMPLE_CROPPED_IMAGE_NAME = "SampleCropImage";
 
     private RadioGroup mRadioGroupAspectRatio, mRadioGroupCompressionSettings;
@@ -66,6 +70,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     private UCropFragment fragment;
     private boolean mShowLoader;
+    private boolean mIsLocalImage; // From picker instead of web
 
     private String mToolbarTitle;
     @DrawableRes
@@ -76,6 +81,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private int mToolbarColor;
     private int mStatusBarColor;
     private int mToolbarWidgetColor;
+
+    private SavedImageState mSavedImageState;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,7 +97,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
             if (requestCode == requestMode) {
                 final Uri selectedUri = data.getData();
                 if (selectedUri != null) {
-                    startCrop(selectedUri);
+                    startCrop(selectedUri, true);
                 } else {
                     Toast.makeText(SampleActivity.this, R.string.toast_cannot_retrieve_selected_image, Toast.LENGTH_SHORT).show();
                 }
@@ -98,6 +105,14 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 handleCropResult(data);
             }
         }
+
+        // azri92 - resume cropping the image that was being viewed in ResultActivity
+        if (requestCode == REQUEST_VIEW_EDIT) {
+            if (resultCode == RESULT_EDIT) {
+                resumeCrop();
+            }
+        }
+
         if (resultCode == UCrop.RESULT_ERROR) {
             handleCropError(data);
         }
@@ -157,7 +172,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                         minSizePixels + random.nextInt(maxSizePixels - minSizePixels),
                         minSizePixels + random.nextInt(maxSizePixels - minSizePixels)));
 
-                startCrop(uri);
+                startCrop(uri, false);
             }
         });
         settingsView = findViewById(R.id.settings);
@@ -219,7 +234,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         startActivityForResult(Intent.createChooser(intent, getString(R.string.label_select_picture)), requestMode);
     }
 
-    private void startCrop(@NonNull Uri uri) {
+    private void startCrop(@NonNull Uri originUri, boolean isLocalImage) {
         String destinationFileName = SAMPLE_CROPPED_IMAGE_NAME;
         switch (mRadioGroupCompressionSettings.getCheckedRadioButtonId()) {
             case R.id.radio_png:
@@ -230,10 +245,18 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 break;
         }
 
-        UCrop uCrop = UCrop.of(uri, Uri.fromFile(new File(getCacheDir(), destinationFileName)));
+        Uri destinationUri = Uri.fromFile(new File(getCacheDir(), destinationFileName));
+        UCrop uCrop = UCrop.of(originUri, destinationUri);
 
         uCrop = basisConfig(uCrop);
         uCrop = advancedConfig(uCrop);
+
+        // azri92 - save image state only for locally picked photos
+        if (isLocalImage) {
+            mSavedImageState = new SavedImageState(originUri.toString(), destinationUri.toString());
+            mSavedImageState.setUcropConfig(uCrop);
+        }
+        mIsLocalImage = isLocalImage;
 
         if (requestMode == REQUEST_SELECT_PICTURE_FOR_FRAGMENT) {       //if build variant = fragment
             setupFragment(uCrop);
@@ -241,6 +264,19 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
             uCrop.start(SampleActivity.this);
         }
 
+    }
+
+    /**
+     * @author azri92
+     * Resume cropping with previously saved image state.
+     */
+    private void resumeCrop() {
+        UCrop uCrop = mSavedImageState.getUcropConfig();
+        uCrop = uCrop.withSavedState(
+                mSavedImageState.getImageMatrixValues(),
+                mSavedImageState.getCropRect());
+
+        uCrop.start(SampleActivity.this);
     }
 
     /**
@@ -364,10 +400,31 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private void handleCropResult(@NonNull Intent result) {
         final Uri resultUri = UCrop.getOutput(result);
         if (resultUri != null) {
-            ResultActivity.startWithUri(SampleActivity.this, resultUri);
+            if (mIsLocalImage) {
+                // azri92 - set values for last state only for local image
+                float[] matrixValues = result.getFloatArrayExtra(UCrop.EXTRA_IMAGE_MATRIX_VALUES);
+                RectF cropRect = result.getParcelableExtra(UCrop.EXTRA_CROP_RECT);
+                mSavedImageState.setImageMatrixValues(matrixValues);
+                mSavedImageState.setCropRect(cropRect);
+                goToResultActivityWithSavedState(resultUri);
+            } else {
+                ResultActivity.startWithUri(this, resultUri);
+            }
         } else {
             Toast.makeText(SampleActivity.this, R.string.toast_cannot_retrieve_cropped_image, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * @author azri92
+     * Passes request to receive activity result to resumue editing image.
+     * @param uri of the edited image
+     */
+    private void goToResultActivityWithSavedState(@NonNull Uri uri) {
+        Intent intent = new Intent(SampleActivity.this, ResultActivity.class);
+        intent.setData(uri);
+        intent.putExtra(ResultActivity.EXTRA_IS_LOCAL_IMAGE, mIsLocalImage);
+        startActivityForResult(intent, REQUEST_VIEW_EDIT);
     }
 
     @SuppressWarnings("ThrowableResultOfMethodCallIgnored")

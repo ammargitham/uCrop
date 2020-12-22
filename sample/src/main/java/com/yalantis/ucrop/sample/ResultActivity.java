@@ -48,6 +48,9 @@ public class ResultActivity extends BaseActivity {
     private static final String CHANNEL_ID = "3000";
     private static final int DOWNLOAD_NOTIFICATION_ID_DONE = 911;
 
+    public static final String EXTRA_IS_LOCAL_IMAGE = "extra_is_local_image";
+    private boolean isLocalImage;
+
     public static void startWithUri(@NonNull Context context, @NonNull Uri uri) {
         Intent intent = new Intent(context, ResultActivity.class);
         intent.setData(uri);
@@ -75,6 +78,8 @@ public class ResultActivity extends BaseActivity {
         options.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(new File(getIntent().getData().getPath()).getAbsolutePath(), options);
 
+        isLocalImage = getIntent().getBooleanExtra(EXTRA_IS_LOCAL_IMAGE, false);
+
         setSupportActionBar((Toolbar) findViewById(R.id.toolbar));
         final ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) {
@@ -86,6 +91,8 @@ public class ResultActivity extends BaseActivity {
     @Override
     public boolean onCreateOptionsMenu(final Menu menu) {
         getMenuInflater().inflate(R.menu.menu_result, menu);
+        // azri92 - only show edit button if source image is from local
+        menu.findItem(R.id.menu_edit).setVisible(isLocalImage);
         return true;
     }
 
@@ -93,12 +100,14 @@ public class ResultActivity extends BaseActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_download) {
             saveCroppedImage();
+        } else if (item.getItemId() == R.id.menu_edit) {
+            setResult(SampleActivity.RESULT_EDIT);
+            finish();
         } else if (item.getItemId() == android.R.id.home) {
             onBackPressed();
         }
         return super.onOptionsItemSelected(item);
     }
-
 
     /**
      * Callback received when a permissions request has been completed.
