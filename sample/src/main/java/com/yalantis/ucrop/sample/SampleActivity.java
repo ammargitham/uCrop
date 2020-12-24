@@ -26,6 +26,13 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.ColorInt;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
+
 import com.yalantis.ucrop.UCrop;
 import com.yalantis.ucrop.UCropActivity;
 import com.yalantis.ucrop.UCropFragment;
@@ -34,13 +41,6 @@ import com.yalantis.ucrop.UCropFragmentCallback;
 import java.io.File;
 import java.util.Locale;
 import java.util.Random;
-
-import androidx.annotation.ColorInt;
-import androidx.annotation.DrawableRes;
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.widget.Toolbar;
-import androidx.core.content.ContextCompat;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -116,6 +116,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         if (resultCode == UCrop.RESULT_ERROR) {
             handleCropError(data);
         }
+
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     private TextWatcher mAspectRatioTextWatcher = new TextWatcher() {
@@ -147,8 +149,9 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         @Override
         public void afterTextChanged(Editable s) {
             if (s != null && !s.toString().trim().isEmpty()) {
-                if (Integer.valueOf(s.toString()) < UCrop.MIN_SIZE) {
-                    Toast.makeText(SampleActivity.this, String.format(getString(R.string.format_max_cropped_image_size), UCrop.MIN_SIZE), Toast.LENGTH_SHORT).show();
+                if (Integer.parseInt(s.toString()) < UCrop.MIN_SIZE) {
+                    Toast.makeText(SampleActivity.this, String.format(getString(R.string.format_max_cropped_image_size), UCrop.MIN_SIZE),
+                                   Toast.LENGTH_SHORT).show();
                 }
             }
         }
@@ -286,33 +289,29 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
      * @return - ucrop builder instance
      */
     private UCrop basisConfig(@NonNull UCrop uCrop) {
-        switch (mRadioGroupAspectRatio.getCheckedRadioButtonId()) {
-            case R.id.radio_origin:
-                uCrop = uCrop.useSourceImageAspectRatio();
-                break;
-            case R.id.radio_square:
-                uCrop = uCrop.withAspectRatio(1, 1);
-                break;
-            case R.id.radio_dynamic:
-                // do nothing
-                break;
-            default:
-                try {
-                    float ratioX = Float.valueOf(mEditTextRatioX.getText().toString().trim());
-                    float ratioY = Float.valueOf(mEditTextRatioY.getText().toString().trim());
-                    if (ratioX > 0 && ratioY > 0) {
-                        uCrop = uCrop.withAspectRatio(ratioX, ratioY);
-                    }
-                } catch (NumberFormatException e) {
-                    Log.i(TAG, String.format("Number please: %s", e.getMessage()));
+        int checkedRadioButtonId = mRadioGroupAspectRatio.getCheckedRadioButtonId();
+        if (checkedRadioButtonId == R.id.radio_origin) {
+            uCrop = uCrop.useSourceImageAspectRatio();
+        } else if (checkedRadioButtonId == R.id.radio_square) {
+            uCrop = uCrop.withAspectRatio(1, 1);
+        } else if (checkedRadioButtonId == R.id.radio_dynamic) {
+            // do nothing
+        } else {
+            try {
+                float ratioX = Float.parseFloat(mEditTextRatioX.getText().toString().trim());
+                float ratioY = Float.parseFloat(mEditTextRatioY.getText().toString().trim());
+                if (ratioX > 0 && ratioY > 0) {
+                    uCrop = uCrop.withAspectRatio(ratioX, ratioY);
                 }
-                break;
+            } catch (NumberFormatException e) {
+                Log.i(TAG, String.format("Number please: %s", e.getMessage()));
+            }
         }
 
         if (mCheckBoxMaxSize.isChecked()) {
             try {
-                int maxWidth = Integer.valueOf(mEditTextMaxWidth.getText().toString().trim());
-                int maxHeight = Integer.valueOf(mEditTextMaxHeight.getText().toString().trim());
+                int maxWidth = Integer.parseInt(mEditTextMaxWidth.getText().toString().trim());
+                int maxHeight = Integer.parseInt(mEditTextMaxHeight.getText().toString().trim());
                 if (maxWidth > UCrop.MIN_SIZE && maxHeight > UCrop.MIN_SIZE) {
                     uCrop = uCrop.withMaxResultSize(maxWidth, maxHeight);
                 }
@@ -333,25 +332,22 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private UCrop advancedConfig(@NonNull UCrop uCrop) {
         UCrop.Options options = new UCrop.Options();
 
-        switch (mRadioGroupCompressionSettings.getCheckedRadioButtonId()) {
-            case R.id.radio_png:
-                options.setCompressionFormat(Bitmap.CompressFormat.PNG);
-                break;
-            case R.id.radio_jpeg:
-            default:
-                options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
-                break;
+        int checkedRadioButtonId = mRadioGroupCompressionSettings.getCheckedRadioButtonId();
+        if (checkedRadioButtonId == R.id.radio_png) {
+            options.setCompressionFormat(Bitmap.CompressFormat.PNG);
+        } else {
+            options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
         }
         options.setCompressionQuality(mSeekBarQuality.getProgress());
-
         options.setHideBottomControls(mCheckBoxHideBottomControls.isChecked());
         options.setFreeStyleCropEnabled(mCheckBoxFreeStyleCrop.isChecked());
 
         /*
         If you want to configure how gestures work for all UCropActivity tabs
 
-        options.setAllowedGestures(UCropActivity.SCALE, UCropActivity.ROTATE, UCropActivity.ALL);
+
         * */
+        options.setAllowedGestures(UCropActivity.SCALE, UCropActivity.ROTATE, UCropActivity.ALL);
 
         /*
         This sets max size for bitmap that will be decoded from source Uri.
@@ -416,9 +412,9 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     }
 
     /**
+     * @param uri of the edited image
      * @author azri92
      * Passes request to receive activity result to resumue editing image.
-     * @param uri of the edited image
      */
     private void goToResultActivityWithSavedState(@NonNull Uri uri) {
         Intent intent = new Intent(SampleActivity.this, ResultActivity.class);
@@ -459,8 +455,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     public void removeFragmentFromScreen() {
         getSupportFragmentManager().beginTransaction()
-                .remove(fragment)
-                .commit();
+                                   .remove(fragment)
+                                   .commit();
         toolbar.setVisibility(View.GONE);
         settingsView.setVisibility(View.VISIBLE);
     }
@@ -468,8 +464,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     public void setupFragment(UCrop uCrop) {
         fragment = uCrop.getFragment(uCrop.getIntent(this).getExtras());
         getSupportFragmentManager().beginTransaction()
-                .add(R.id.fragment_container, fragment, UCropFragment.TAG)
-                .commitAllowingStateLoss();
+                                   .add(R.id.fragment_container, fragment, UCropFragment.TAG)
+                                   .commitAllowingStateLoss();
 
         setupViews(uCrop.getIntent(this).getExtras());
     }
@@ -480,7 +476,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         mToolbarColor = args.getInt(UCrop.Options.EXTRA_TOOL_BAR_COLOR, ContextCompat.getColor(this, R.color.ucrop_color_toolbar));
         mToolbarCancelDrawable = args.getInt(UCrop.Options.EXTRA_UCROP_WIDGET_CANCEL_DRAWABLE, R.drawable.ucrop_ic_cross);
         mToolbarCropDrawable = args.getInt(UCrop.Options.EXTRA_UCROP_WIDGET_CROP_DRAWABLE, R.drawable.ucrop_ic_done);
-        mToolbarWidgetColor = args.getInt(UCrop.Options.EXTRA_UCROP_WIDGET_COLOR_TOOLBAR, ContextCompat.getColor(this, R.color.ucrop_color_toolbar_widget));
+        mToolbarWidgetColor = args
+                .getInt(UCrop.Options.EXTRA_UCROP_WIDGET_COLOR_TOOLBAR, ContextCompat.getColor(this, R.color.ucrop_color_toolbar_widget));
         mToolbarTitle = args.getString(UCrop.Options.EXTRA_UCROP_TITLE_TEXT_TOOLBAR);
         mToolbarTitle = mToolbarTitle != null ? mToolbarTitle : getResources().getString(R.string.ucrop_label_edit_photo);
 

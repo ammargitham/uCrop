@@ -73,6 +73,7 @@ public class TransformImageView extends AppCompatImageView {
 
         void onScale(float currentScale);
 
+        void onStartCropResize();
     }
 
     public TransformImageView(Context context) {

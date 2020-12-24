@@ -151,11 +151,19 @@ public class AspectRatioTextView extends AppCompatTextView {
         }
     }
 
+    public String getTitle() {
+        return mAspectRatioTitle;
+    }
+
     private void setTitle() {
         if (!TextUtils.isEmpty(mAspectRatioTitle)) {
             setText(mAspectRatioTitle);
         } else {
-            setText(String.format(Locale.US, "%d:%d", (int) mAspectRatioX, (int) mAspectRatioY));
+            final String text = String.format(Locale.US, "%d:%d", (int) mAspectRatioX, (int) mAspectRatioY);
+            if (TextUtils.isEmpty(mAspectRatioTitle)) {
+                mAspectRatioTitle = text;
+            }
+            setText(text);
         }
     }
 
