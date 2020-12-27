@@ -70,6 +70,7 @@ public class UCropFragment extends Fragment {
     private static final int SCALE_WIDGET_SENSITIVITY_COEFFICIENT = 15000;
     private static final int ROTATE_WIDGET_SENSITIVITY_COEFFICIENT = 42;
     private UCropFragmentCallback callback;
+    private float defaultAspectRatio;
 
     private int mActiveControlsWidgetColor;
 
@@ -278,16 +279,14 @@ public class UCropFragment extends Fragment {
         ArrayList<AspectRatio> aspectRatioList = bundle.getParcelableArrayList(UCrop.Options.EXTRA_ASPECT_RATIO_OPTIONS);
 
         if (aspectRatioX > 0 && aspectRatioY > 0) {
-            // if (mWrapperStateAspectRatio != null) {
-            //     mWrapperStateAspectRatio.setVisibility(View.GONE);
-            // }
-            mGestureCropImageView.setTargetAspectRatio(aspectRatioX / aspectRatioY);
+            defaultAspectRatio = aspectRatioX / aspectRatioY;
         } else if (aspectRatioList != null && aspectRationSelectedByDefault < aspectRatioList.size()) {
-            mGestureCropImageView.setTargetAspectRatio(aspectRatioList.get(aspectRationSelectedByDefault).getAspectRatioX() /
-                                                               aspectRatioList.get(aspectRationSelectedByDefault).getAspectRatioY());
+            defaultAspectRatio = aspectRatioList.get(aspectRationSelectedByDefault).getAspectRatioX() / aspectRatioList
+                    .get(aspectRationSelectedByDefault).getAspectRatioY();
         } else {
-            mGestureCropImageView.setTargetAspectRatio(CropImageView.SOURCE_IMAGE_ASPECT_RATIO);
+            defaultAspectRatio = CropImageView.SOURCE_IMAGE_ASPECT_RATIO;
         }
+        mGestureCropImageView.setTargetAspectRatio(defaultAspectRatio);
 
         // Result bitmap max size options
         int maxSizeX = bundle.getInt(UCrop.EXTRA_MAX_SIZE_X, 0);
@@ -588,6 +587,10 @@ public class UCropFragment extends Fragment {
         }
 
         ((RelativeLayout) view.findViewById(R.id.ucrop_photobox)).addView(mBlockingView);
+    }
+
+    public void reset() {
+        mGestureCropImageView.resetCropView(defaultAspectRatio);
     }
 
     public void cropAndSaveImage() {
