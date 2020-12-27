@@ -105,6 +105,7 @@ public class UCropFragment extends Fragment {
     @Override
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
+        if (callback != null) return;
         if (getParentFragment() instanceof UCropFragmentCallback)
             callback = (UCropFragmentCallback) getParentFragment();
         else if (context instanceof UCropFragmentCallback)
