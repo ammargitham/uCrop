@@ -1,11 +1,11 @@
 package com.yalantis.ucrop.sample;
 
-import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.PorterDuff;
+import android.graphics.RectF;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -27,6 +27,13 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.ColorInt;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
+
 import com.yalantis.ucrop.UCrop;
 import com.yalantis.ucrop.UCropActivity;
 import com.yalantis.ucrop.UCropFragment;
@@ -36,14 +43,6 @@ import java.io.File;
 import java.util.Locale;
 import java.util.Random;
 
-import androidx.annotation.ColorInt;
-import androidx.annotation.DrawableRes;
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
  */
@@ -51,8 +50,11 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     private static final String TAG = "SampleActivity";
 
+    public static final int RESULT_EDIT = 10001;
+
     private static final int REQUEST_SELECT_PICTURE = 0x01;
     private static final int REQUEST_SELECT_PICTURE_FOR_FRAGMENT = 0x02;
+    private static final int REQUEST_VIEW_EDIT = 0x03;
     private static final String SAMPLE_CROPPED_IMAGE_NAME = "SampleCropImage";
 
     private RadioGroup mRadioGroupAspectRatio, mRadioGroupCompressionSettings;
@@ -69,6 +71,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     private UCropFragment fragment;
     private boolean mShowLoader;
+    private boolean mIsLocalImage; // From picker instead of web
 
     private String mToolbarTitle;
     @DrawableRes
@@ -79,6 +82,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private int mToolbarColor;
     private int mStatusBarColor;
     private int mToolbarWidgetColor;
+
+    private SavedImageState mSavedImageState;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,7 +98,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
             if (requestCode == requestMode) {
                 final Uri selectedUri = data.getData();
                 if (selectedUri != null) {
-                    startCrop(selectedUri);
+                    startCrop(selectedUri, true);
                 } else {
                     Toast.makeText(SampleActivity.this, R.string.toast_cannot_retrieve_selected_image, Toast.LENGTH_SHORT).show();
                 }
@@ -101,9 +106,19 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 handleCropResult(data);
             }
         }
+
+        // azri92 - resume cropping the image that was being viewed in ResultActivity
+        if (requestCode == REQUEST_VIEW_EDIT) {
+            if (resultCode == RESULT_EDIT) {
+                resumeCrop();
+            }
+        }
+
         if (resultCode == UCrop.RESULT_ERROR) {
             handleCropError(data);
         }
+
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     /**
@@ -152,8 +167,9 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         @Override
         public void afterTextChanged(Editable s) {
             if (s != null && !s.toString().trim().isEmpty()) {
-                if (Integer.valueOf(s.toString()) < UCrop.MIN_SIZE) {
-                    Toast.makeText(SampleActivity.this, String.format(getString(R.string.format_max_cropped_image_size), UCrop.MIN_SIZE), Toast.LENGTH_SHORT).show();
+                if (Integer.parseInt(s.toString()) < UCrop.MIN_SIZE) {
+                    Toast.makeText(SampleActivity.this, String.format(getString(R.string.format_max_cropped_image_size), UCrop.MIN_SIZE),
+                                   Toast.LENGTH_SHORT).show();
                 }
             }
         }
@@ -174,10 +190,10 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 int minSizePixels = 800;
                 int maxSizePixels = 2400;
                 Uri uri = Uri.parse(String.format(Locale.getDefault(), "https://unsplash.it/%d/%d/?random",
-                        minSizePixels + random.nextInt(maxSizePixels - minSizePixels),
-                        minSizePixels + random.nextInt(maxSizePixels - minSizePixels)));
+                                                  minSizePixels + random.nextInt(maxSizePixels - minSizePixels),
+                                                  minSizePixels + random.nextInt(maxSizePixels - minSizePixels)));
 
-                startCrop(uri);
+                startCrop(uri, false);
             }
         });
         settingsView = findViewById(R.id.settings);
@@ -227,27 +243,19 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     }
 
     private void pickFromGallery() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN
-                && ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermission(Manifest.permission.READ_EXTERNAL_STORAGE,
-                    getString(R.string.permission_read_storage_rationale),
-                    REQUEST_STORAGE_READ_ACCESS_PERMISSION);
-        } else {
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT)
-                    .setType("image/*")
-                    .addCategory(Intent.CATEGORY_OPENABLE);
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT)
+                .setType("image/*")
+                .addCategory(Intent.CATEGORY_OPENABLE);
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                String[] mimeTypes = {"image/jpeg", "image/png"};
-                intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-            }
-
-            startActivityForResult(Intent.createChooser(intent, getString(R.string.label_select_picture)), requestMode);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            String[] mimeTypes = {"image/jpeg", "image/png"};
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
         }
+
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.label_select_picture)), requestMode);
     }
 
-    private void startCrop(@NonNull Uri uri) {
+    private void startCrop(@NonNull Uri originUri, boolean isLocalImage) {
         String destinationFileName = SAMPLE_CROPPED_IMAGE_NAME;
         switch (mRadioGroupCompressionSettings.getCheckedRadioButtonId()) {
             case R.id.radio_png:
@@ -258,10 +266,18 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 break;
         }
 
-        UCrop uCrop = UCrop.of(uri, Uri.fromFile(new File(getCacheDir(), destinationFileName)));
+        Uri destinationUri = Uri.fromFile(new File(getCacheDir(), destinationFileName));
+        UCrop uCrop = UCrop.of(originUri, destinationUri);
 
         uCrop = basisConfig(uCrop);
         uCrop = advancedConfig(uCrop);
+
+        // azri92 - save image state only for locally picked photos
+        if (isLocalImage) {
+            mSavedImageState = new SavedImageState(originUri.toString(), destinationUri.toString());
+            mSavedImageState.setUcropConfig(uCrop);
+        }
+        mIsLocalImage = isLocalImage;
 
         if (requestMode == REQUEST_SELECT_PICTURE_FOR_FRAGMENT) {       //if build variant = fragment
             setupFragment(uCrop);
@@ -272,39 +288,48 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     }
 
     /**
+     * @author azri92
+     * Resume cropping with previously saved image state.
+     */
+    private void resumeCrop() {
+        UCrop uCrop = mSavedImageState.getUcropConfig();
+        uCrop = uCrop.withSavedState(
+                mSavedImageState.getImageMatrixValues(),
+                mSavedImageState.getCropRect());
+
+        uCrop.start(SampleActivity.this);
+    }
+
+    /**
      * In most cases you need only to set crop aspect ration and max size for resulting image.
      *
      * @param uCrop - ucrop builder instance
      * @return - ucrop builder instance
      */
     private UCrop basisConfig(@NonNull UCrop uCrop) {
-        switch (mRadioGroupAspectRatio.getCheckedRadioButtonId()) {
-            case R.id.radio_origin:
-                uCrop = uCrop.useSourceImageAspectRatio();
-                break;
-            case R.id.radio_square:
-                uCrop = uCrop.withAspectRatio(1, 1);
-                break;
-            case R.id.radio_dynamic:
-                // do nothing
-                break;
-            default:
-                try {
-                    float ratioX = Float.valueOf(mEditTextRatioX.getText().toString().trim());
-                    float ratioY = Float.valueOf(mEditTextRatioY.getText().toString().trim());
-                    if (ratioX > 0 && ratioY > 0) {
-                        uCrop = uCrop.withAspectRatio(ratioX, ratioY);
-                    }
-                } catch (NumberFormatException e) {
-                    Log.i(TAG, String.format("Number please: %s", e.getMessage()));
+        int checkedRadioButtonId = mRadioGroupAspectRatio.getCheckedRadioButtonId();
+        if (checkedRadioButtonId == R.id.radio_origin) {
+            uCrop = uCrop.useSourceImageAspectRatio();
+        } else if (checkedRadioButtonId == R.id.radio_square) {
+            uCrop = uCrop.withAspectRatio(1, 1);
+        } else if (checkedRadioButtonId == R.id.radio_dynamic) {
+            // do nothing
+        } else {
+            try {
+                float ratioX = Float.parseFloat(mEditTextRatioX.getText().toString().trim());
+                float ratioY = Float.parseFloat(mEditTextRatioY.getText().toString().trim());
+                if (ratioX > 0 && ratioY > 0) {
+                    uCrop = uCrop.withAspectRatio(ratioX, ratioY);
                 }
-                break;
+            } catch (NumberFormatException e) {
+                Log.i(TAG, String.format("Number please: %s", e.getMessage()));
+            }
         }
 
         if (mCheckBoxMaxSize.isChecked()) {
             try {
-                int maxWidth = Integer.valueOf(mEditTextMaxWidth.getText().toString().trim());
-                int maxHeight = Integer.valueOf(mEditTextMaxHeight.getText().toString().trim());
+                int maxWidth = Integer.parseInt(mEditTextMaxWidth.getText().toString().trim());
+                int maxHeight = Integer.parseInt(mEditTextMaxHeight.getText().toString().trim());
                 if (maxWidth > UCrop.MIN_SIZE && maxHeight > UCrop.MIN_SIZE) {
                     uCrop = uCrop.withMaxResultSize(maxWidth, maxHeight);
                 }
@@ -325,25 +350,22 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private UCrop advancedConfig(@NonNull UCrop uCrop) {
         UCrop.Options options = new UCrop.Options();
 
-        switch (mRadioGroupCompressionSettings.getCheckedRadioButtonId()) {
-            case R.id.radio_png:
-                options.setCompressionFormat(Bitmap.CompressFormat.PNG);
-                break;
-            case R.id.radio_jpeg:
-            default:
-                options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
-                break;
+        int checkedRadioButtonId = mRadioGroupCompressionSettings.getCheckedRadioButtonId();
+        if (checkedRadioButtonId == R.id.radio_png) {
+            options.setCompressionFormat(Bitmap.CompressFormat.PNG);
+        } else {
+            options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
         }
         options.setCompressionQuality(mSeekBarQuality.getProgress());
-
         options.setHideBottomControls(mCheckBoxHideBottomControls.isChecked());
         options.setFreeStyleCropEnabled(mCheckBoxFreeStyleCrop.isChecked());
 
         /*
         If you want to configure how gestures work for all UCropActivity tabs
 
-        options.setAllowedGestures(UCropActivity.SCALE, UCropActivity.ROTATE, UCropActivity.ALL);
+
         * */
+        options.setAllowedGestures(UCropActivity.SCALE, UCropActivity.ROTATE, UCropActivity.ALL);
 
         /*
         This sets max size for bitmap that will be decoded from source Uri.
@@ -392,10 +414,31 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private void handleCropResult(@NonNull Intent result) {
         final Uri resultUri = UCrop.getOutput(result);
         if (resultUri != null) {
-            ResultActivity.startWithUri(SampleActivity.this, resultUri);
+            if (mIsLocalImage) {
+                // azri92 - set values for last state only for local image
+                float[] matrixValues = result.getFloatArrayExtra(UCrop.EXTRA_IMAGE_MATRIX_VALUES);
+                RectF cropRect = result.getParcelableExtra(UCrop.EXTRA_CROP_RECT);
+                mSavedImageState.setImageMatrixValues(matrixValues);
+                mSavedImageState.setCropRect(cropRect);
+                goToResultActivityWithSavedState(resultUri);
+            } else {
+                ResultActivity.startWithUri(this, resultUri);
+            }
         } else {
             Toast.makeText(SampleActivity.this, R.string.toast_cannot_retrieve_cropped_image, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * @param uri of the edited image
+     * @author azri92
+     * Passes request to receive activity result to resumue editing image.
+     */
+    private void goToResultActivityWithSavedState(@NonNull Uri uri) {
+        Intent intent = new Intent(SampleActivity.this, ResultActivity.class);
+        intent.setData(uri);
+        intent.putExtra(ResultActivity.EXTRA_IS_LOCAL_IMAGE, mIsLocalImage);
+        startActivityForResult(intent, REQUEST_VIEW_EDIT);
     }
 
     @SuppressWarnings("ThrowableResultOfMethodCallIgnored")
@@ -430,8 +473,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     public void removeFragmentFromScreen() {
         getSupportFragmentManager().beginTransaction()
-                .remove(fragment)
-                .commit();
+                                   .remove(fragment)
+                                   .commit();
         toolbar.setVisibility(View.GONE);
         settingsView.setVisibility(View.VISIBLE);
     }
@@ -439,8 +482,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     public void setupFragment(UCrop uCrop) {
         fragment = uCrop.getFragment(uCrop.getIntent(this).getExtras());
         getSupportFragmentManager().beginTransaction()
-                .add(R.id.fragment_container, fragment, UCropFragment.TAG)
-                .commitAllowingStateLoss();
+                                   .add(R.id.fragment_container, fragment, UCropFragment.TAG)
+                                   .commitAllowingStateLoss();
 
         setupViews(uCrop.getIntent(this).getExtras());
     }
@@ -451,7 +494,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         mToolbarColor = args.getInt(UCrop.Options.EXTRA_TOOL_BAR_COLOR, ContextCompat.getColor(this, R.color.ucrop_color_toolbar));
         mToolbarCancelDrawable = args.getInt(UCrop.Options.EXTRA_UCROP_WIDGET_CANCEL_DRAWABLE, R.drawable.ucrop_ic_cross);
         mToolbarCropDrawable = args.getInt(UCrop.Options.EXTRA_UCROP_WIDGET_CROP_DRAWABLE, R.drawable.ucrop_ic_done);
-        mToolbarWidgetColor = args.getInt(UCrop.Options.EXTRA_UCROP_WIDGET_COLOR_TOOLBAR, ContextCompat.getColor(this, R.color.ucrop_color_toolbar_widget));
+        mToolbarWidgetColor = args
+                .getInt(UCrop.Options.EXTRA_UCROP_WIDGET_COLOR_TOOLBAR, ContextCompat.getColor(this, R.color.ucrop_color_toolbar_widget));
         mToolbarTitle = args.getString(UCrop.Options.EXTRA_UCROP_TITLE_TEXT_TOOLBAR);
         mToolbarTitle = mToolbarTitle != null ? mToolbarTitle : getResources().getString(R.string.ucrop_label_edit_photo);
 

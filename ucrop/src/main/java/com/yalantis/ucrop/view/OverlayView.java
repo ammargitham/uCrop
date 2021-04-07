@@ -7,10 +7,14 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Region;
-import android.os.Build;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+
+import androidx.annotation.ColorInt;
+import androidx.annotation.IntDef;
+import androidx.annotation.IntRange;
+import androidx.annotation.NonNull;
 
 import com.yalantis.ucrop.R;
 import com.yalantis.ucrop.callback.OverlayViewChangeListener;
@@ -18,11 +22,6 @@ import com.yalantis.ucrop.util.RectUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-
-import androidx.annotation.ColorInt;
-import androidx.annotation.IntDef;
-import androidx.annotation.IntRange;
-import androidx.annotation.NonNull;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -61,6 +60,7 @@ public class OverlayView extends View {
     private Paint mCropGridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint mCropFramePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint mCropFrameCornersPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private RectF mSavedCropRect;
     @FreestyleMode
     private int mFreestyleCropMode = DEFAULT_FREESTYLE_CROP_MODE;
     private float mPreviousTouchX = -1, mPreviousTouchY = -1;
@@ -72,6 +72,7 @@ public class OverlayView extends View {
     private OverlayViewChangeListener mCallback;
 
     private boolean mShouldSetupCropBounds;
+    private int mControllersWrapperRef;
 
     {
         mTouchPointThreshold = getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_rect_corner_touch_threshold);
@@ -100,9 +101,27 @@ public class OverlayView extends View {
         mCallback = callback;
     }
 
+    /**
+     * @param savedCropRect of previous edit
+     * @author azri92
+     * For resuming previous state.
+     */
+    public void setSavedCropRect(RectF savedCropRect) {
+        mSavedCropRect = savedCropRect;
+    }
+
     @NonNull
     public RectF getCropViewRect() {
         return mCropViewRect;
+    }
+
+    public void setCropViewRect(RectF cropViewRect) {
+        if (cropViewRect == null) {
+            return;
+        }
+        mCropViewRect.set(cropViewRect);
+        updateGridPoints();
+        postInvalidate();
     }
 
     @Deprecated
@@ -214,6 +233,13 @@ public class OverlayView extends View {
     }
 
     /**
+     * Setter for crop grid corner color
+     */
+    public void setCropGridCornerColor(@ColorInt int color) {
+        mCropFrameCornersPaint.setColor(color);
+    }
+
+    /**
      * This method sets aspect ratio for crop bounds.
      *
      * @param targetAspectRatio - aspect ratio for image crop (e.g. 1.77(7) for 16:9)
@@ -234,15 +260,25 @@ public class OverlayView extends View {
      */
     public void setupCropBounds() {
         int height = (int) (mThisWidth / mTargetAspectRatio);
-        if (height > mThisHeight) {
-            int width = (int) (mThisHeight * mTargetAspectRatio);
+        if (mSavedCropRect != null && mCropViewRect.isEmpty()) {
+            mCropViewRect.set(
+                    getPaddingLeft() + mSavedCropRect.left,
+                    getPaddingTop() + mSavedCropRect.top,
+                    getPaddingLeft() + mSavedCropRect.right,
+                    getPaddingTop() + mSavedCropRect.bottom);
+        } else if (height > mThisHeight - getPaddingBottom()) {
+            int width = (int) ((mThisHeight - getPaddingBottom()) * mTargetAspectRatio);
             int halfDiff = (mThisWidth - width) / 2;
-            mCropViewRect.set(getPaddingLeft() + halfDiff, getPaddingTop(),
-                    getPaddingLeft() + width + halfDiff, getPaddingTop() + mThisHeight);
+            mCropViewRect.set(getPaddingLeft() + halfDiff,
+                              getPaddingTop(),
+                              getPaddingLeft() + width + halfDiff,
+                              getPaddingTop() + (mThisHeight - getPaddingBottom()));
         } else {
-            int halfDiff = (mThisHeight - height) / 2;
-            mCropViewRect.set(getPaddingLeft(), getPaddingTop() + halfDiff,
-                    getPaddingLeft() + mThisWidth, getPaddingTop() + height + halfDiff);
+            int halfDiff = (mThisHeight - getPaddingBottom() - height) / 2;
+            mCropViewRect.set(getPaddingLeft(),
+                              getPaddingTop() + halfDiff,
+                              getPaddingLeft() + mThisWidth,
+                              getPaddingTop() + height + halfDiff);
         }
 
         if (mCallback != null) {
@@ -259,13 +295,13 @@ public class OverlayView extends View {
         mGridPoints = null;
         mCircularPath.reset();
         mCircularPath.addCircle(mCropViewRect.centerX(), mCropViewRect.centerY(),
-                Math.min(mCropViewRect.width(), mCropViewRect.height()) / 2.f, Path.Direction.CW);
+                                Math.min(mCropViewRect.width(), mCropViewRect.height()) / 2.f, Path.Direction.CW);
     }
 
     protected void init() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) {
-            setLayerType(LAYER_TYPE_SOFTWARE, null);
-        }
+        // if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) {
+        //     setLayerType(LAYER_TYPE_SOFTWARE, null);
+        // }
     }
 
     @Override
@@ -314,6 +350,9 @@ public class OverlayView extends View {
             } else if (mPreviousTouchX < 0) {
                 mPreviousTouchX = x;
                 mPreviousTouchY = y;
+            }
+            if (shouldHandle && mCallback != null) {
+                mCallback.onStartCropResize();
             }
             return shouldHandle;
         }
@@ -412,7 +451,7 @@ public class OverlayView extends View {
         double closestPointDistance = mTouchPointThreshold;
         for (int i = 0; i < 8; i += 2) {
             double distanceToCorner = Math.sqrt(Math.pow(touchX - mCropGridCorners[i], 2)
-                    + Math.pow(touchY - mCropGridCorners[i + 1], 2));
+                                                        + Math.pow(touchY - mCropGridCorners[i + 1], 2));
             if (distanceToCorner < closestPointDistance) {
                 closestPointDistance = distanceToCorner;
                 closestPointIndex = i / 2;
@@ -423,21 +462,21 @@ public class OverlayView extends View {
             return 4;
         }
 
-//        for (int i = 0; i <= 8; i += 2) {
-//
-//            double distanceToCorner;
-//            if (i < 8) { // corners
-//                distanceToCorner = Math.sqrt(Math.pow(touchX - mCropGridCorners[i], 2)
-//                        + Math.pow(touchY - mCropGridCorners[i + 1], 2));
-//            } else { // center
-//                distanceToCorner = Math.sqrt(Math.pow(touchX - mCropGridCenter[0], 2)
-//                        + Math.pow(touchY - mCropGridCenter[1], 2));
-//            }
-//            if (distanceToCorner < closestPointDistance) {
-//                closestPointDistance = distanceToCorner;
-//                closestPointIndex = i / 2;
-//            }
-//        }
+        // for (int i = 0; i <= 8; i += 2) {
+        //
+        //     double distanceToCorner;
+        //     if (i < 8) { // corners
+        //         distanceToCorner = Math.sqrt(Math.pow(touchX - mCropGridCorners[i], 2)
+        //                 + Math.pow(touchY - mCropGridCorners[i + 1], 2));
+        //     } else { // center
+        //         distanceToCorner = Math.sqrt(Math.pow(touchX - mCropGridCenter[0], 2)
+        //                 + Math.pow(touchY - mCropGridCenter[1], 2));
+        //     }
+        //     if (distanceToCorner < closestPointDistance) {
+        //         closestPointDistance = distanceToCorner;
+        //         closestPointIndex = i / 2;
+        //     }
+        // }
         return closestPointIndex;
     }
 
@@ -458,7 +497,7 @@ public class OverlayView extends View {
 
         if (mCircleDimmedLayer) { // Draw 1px stroke to fix antialias
             canvas.drawCircle(mCropViewRect.centerX(), mCropViewRect.centerY(),
-                    Math.min(mCropViewRect.width(), mCropViewRect.height()) / 2.f, mDimmedStrokePaint);
+                              Math.min(mCropViewRect.width(), mCropViewRect.height()) / 2.f, mDimmedStrokePaint);
         }
     }
 
@@ -524,7 +563,7 @@ public class OverlayView extends View {
     protected void processStyledAttributes(@NonNull TypedArray a) {
         mCircleDimmedLayer = a.getBoolean(R.styleable.ucrop_UCropView_ucrop_circle_dimmed_layer, DEFAULT_CIRCLE_DIMMED_LAYER);
         mDimmedColor = a.getColor(R.styleable.ucrop_UCropView_ucrop_dimmed_color,
-                getResources().getColor(R.color.ucrop_color_default_dimmed));
+                                  getResources().getColor(R.color.ucrop_color_default_dimmed));
         mDimmedStrokePaint.setColor(mDimmedColor);
         mDimmedStrokePaint.setStyle(Paint.Style.STROKE);
         mDimmedStrokePaint.setStrokeWidth(1);
@@ -542,9 +581,10 @@ public class OverlayView extends View {
     @SuppressWarnings("deprecation")
     private void initCropFrameStyle(@NonNull TypedArray a) {
         int cropFrameStrokeSize = a.getDimensionPixelSize(R.styleable.ucrop_UCropView_ucrop_frame_stroke_size,
-                getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_frame_stoke_width));
+                                                          getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_frame_stoke_width));
         int cropFrameColor = a.getColor(R.styleable.ucrop_UCropView_ucrop_frame_color,
-                getResources().getColor(R.color.ucrop_color_default_crop_frame));
+                                        getResources().getColor(R.color.ucrop_color_default_crop_frame));
+
         mCropFramePaint.setStrokeWidth(cropFrameStrokeSize);
         mCropFramePaint.setColor(cropFrameColor);
         mCropFramePaint.setStyle(Paint.Style.STROKE);
@@ -560,9 +600,9 @@ public class OverlayView extends View {
     @SuppressWarnings("deprecation")
     private void initCropGridStyle(@NonNull TypedArray a) {
         int cropGridStrokeSize = a.getDimensionPixelSize(R.styleable.ucrop_UCropView_ucrop_grid_stroke_size,
-                getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_grid_stoke_width));
+                                                         getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_grid_stoke_width));
         int cropGridColor = a.getColor(R.styleable.ucrop_UCropView_ucrop_grid_color,
-                getResources().getColor(R.color.ucrop_color_default_crop_grid));
+                                       getResources().getColor(R.color.ucrop_color_default_crop_grid));
         mCropGridPaint.setStrokeWidth(cropGridStrokeSize);
         mCropGridPaint.setColor(cropGridColor);
 
@@ -570,10 +610,73 @@ public class OverlayView extends View {
         mCropGridColumnCount = a.getInt(R.styleable.ucrop_UCropView_ucrop_grid_column_count, DEFAULT_CROP_GRID_COLUMN_COUNT);
     }
 
-
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({FREESTYLE_CROP_MODE_DISABLE, FREESTYLE_CROP_MODE_ENABLE, FREESTYLE_CROP_MODE_ENABLE_WITH_PASS_THROUGH})
     public @interface FreestyleMode {
     }
 
+    // private static class ZoomCropBoundsRunnable implements Runnable {
+    //
+    //     private final long mDurationMs;
+    //     private final float oldLeft;
+    //     private final float newLeft;
+    //     private final float oldRight;
+    //     private final float newRight;
+    //     private final float oldTop;
+    //     private final float newTop;
+    //     private final float oldBottom;
+    //     private final float newBottom;
+    //     private final long mStartTime;
+    //     private final RectF mTempRect = new RectF();
+    //     private final WeakReference<OverlayView> mOverlayView;
+    //
+    //     public ZoomCropBoundsRunnable(OverlayView overlayView,
+    //                                   long durationMs,
+    //                                   float oldLeft, float newLeft,
+    //                                   float oldRight, float newRight,
+    //                                   float oldTop, float newTop,
+    //                                   float oldBottom, float newBottom) {
+    //         mOverlayView = new WeakReference<>(overlayView);
+    //
+    //         mDurationMs = durationMs;
+    //         this.oldLeft = oldLeft;
+    //         this.newLeft = newLeft;
+    //         this.oldRight = oldRight;
+    //         this.newRight = newRight;
+    //         this.oldTop = oldTop;
+    //         this.newTop = newTop;
+    //         this.oldBottom = oldBottom;
+    //         this.newBottom = newBottom;
+    //         mStartTime = System.currentTimeMillis();
+    //         // Log.d(OverlayView.class.getSimpleName(), "ZoomCropBoundsRunnable: old: " + oldLeft + " " + oldRight + " " + oldTop + " " + oldBottom);
+    //         // Log.d(OverlayView.class.getSimpleName(), "ZoomCropBoundsRunnable: new: " + newLeft + " " + newRight + " " + newTop + " " + newBottom);
+    //     }
+    //
+    //     @Override
+    //     public void run() {
+    //         final OverlayView overlayView = mOverlayView.get();
+    //         if (overlayView == null) {
+    //             return;
+    //         }
+    //         long now = System.currentTimeMillis();
+    //         float currentMs = Math.min(mDurationMs, now - mStartTime);
+    //
+    //         float currentLeft = CubicEasing.easeOut(currentMs, oldLeft, newLeft, mDurationMs);
+    //         float currentRight = CubicEasing.easeOut(currentMs, oldRight, newRight, mDurationMs);
+    //         float currentTop = CubicEasing.easeOut(currentMs, oldTop, newTop, mDurationMs);
+    //         float currentBottom = CubicEasing.easeOut(currentMs, oldBottom, newBottom, mDurationMs);
+    //         Log.d(OverlayView.class.getSimpleName(), "run: " + currentLeft + " " + currentRight + " " + currentTop + " " + currentBottom);
+    //         if (currentMs < mDurationMs) {
+    //             mTempRect.set(currentLeft, currentTop, currentRight, currentBottom);
+    //             overlayView.setCropViewRect(mTempRect);
+    //             // if (mTempRect.left > overlayView.getLeft() && mTempRect.top > overlayView.getTop()
+    //             //         && mTempRect.right < overlayView.getRight() && mTempRect.bottom < overlayView.getBottom()) {
+    //             // }
+    //             overlayView.post(this);
+    //             return;
+    //         }
+    //         mTempRect.set(newLeft, newTop, newRight, newBottom);
+    //         overlayView.setCropViewRect(mTempRect);
+    //     }
+    // }
 }

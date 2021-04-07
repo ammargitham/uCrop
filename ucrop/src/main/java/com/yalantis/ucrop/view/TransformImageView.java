@@ -9,16 +9,16 @@ import android.net.Uri;
 import android.util.AttributeSet;
 import android.util.Log;
 
+import androidx.annotation.IntRange;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.widget.AppCompatImageView;
+
 import com.yalantis.ucrop.callback.BitmapLoadCallback;
 import com.yalantis.ucrop.model.ExifInfo;
 import com.yalantis.ucrop.util.BitmapLoadUtils;
 import com.yalantis.ucrop.util.FastBitmapDrawable;
 import com.yalantis.ucrop.util.RectUtils;
-
-import androidx.annotation.IntRange;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.appcompat.widget.AppCompatImageView;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -46,6 +46,11 @@ public class TransformImageView extends AppCompatImageView {
 
     private float[] mInitialImageCorners;
     private float[] mInitialImageCenter;
+    private float[] mSavedImageMatrixValues;
+
+    private RectF mSavedCropRect;
+
+    private boolean mSavedStateExists = false;
 
     protected boolean mBitmapDecoded = false;
     protected boolean mBitmapLaidOut = false;
@@ -68,6 +73,7 @@ public class TransformImageView extends AppCompatImageView {
 
         void onScale(float currentScale);
 
+        void onStartCropResize();
     }
 
     public TransformImageView(Context context) {
@@ -131,6 +137,40 @@ public class TransformImageView extends AppCompatImageView {
     }
 
     /**
+     * @param savedImageMatrixValues values for image {@link Matrix} from previous edit.
+     * @author azri92
+     */
+    public void setSavedState(float[] savedImageMatrixValues, RectF cropRectValues) {
+        mSavedStateExists = true;
+        mSavedImageMatrixValues = savedImageMatrixValues;
+        mSavedCropRect = cropRectValues;
+    }
+
+    /**
+     * @return true if data of last saved image exists.
+     * @author azri92
+     */
+    public boolean savedImageStateExists() {
+        return mSavedStateExists;
+    }
+
+    /**
+     * @return values for image {@link Matrix} from previous edit.
+     * @author azri92
+     */
+    public float[] getSavedImageMatrixValues() {
+        return mSavedImageMatrixValues;
+    }
+
+    /**
+     * @return crop rect from previous edit.
+     * @author azri92
+     */
+    public RectF getSavedCropRect() {
+        return mSavedCropRect;
+    }
+
+    /**
      * This method takes an Uri as a parameter, then calls method to decode it into Bitmap with specified size.
      *
      * @param imageUri - image Uri
@@ -140,26 +180,29 @@ public class TransformImageView extends AppCompatImageView {
         int maxBitmapSize = getMaxBitmapSize();
 
         BitmapLoadUtils.decodeBitmapInBackground(getContext(), imageUri, outputUri, maxBitmapSize, maxBitmapSize,
-                new BitmapLoadCallback() {
+                                                 new BitmapLoadCallback() {
 
-                    @Override
-                    public void onBitmapLoaded(@NonNull Bitmap bitmap, @NonNull ExifInfo exifInfo, @NonNull String imageInputPath, @Nullable String imageOutputPath) {
-                        mImageInputPath = imageInputPath;
-                        mImageOutputPath = imageOutputPath;
-                        mExifInfo = exifInfo;
+                                                     @Override
+                                                     public void onBitmapLoaded(@NonNull Bitmap bitmap,
+                                                                                @NonNull ExifInfo exifInfo,
+                                                                                @NonNull String imageInputPath,
+                                                                                @Nullable String imageOutputPath) {
+                                                         mImageInputPath = imageInputPath;
+                                                         mImageOutputPath = imageOutputPath;
+                                                         mExifInfo = exifInfo;
 
-                        mBitmapDecoded = true;
-                        setImageBitmap(bitmap);
-                    }
+                                                         mBitmapDecoded = true;
+                                                         setImageBitmap(bitmap);
+                                                     }
 
-                    @Override
-                    public void onFailure(@NonNull Exception bitmapWorkerException) {
-                        Log.e(TAG, "onFailure: setImageUri", bitmapWorkerException);
-                        if (mTransformImageListener != null) {
-                            mTransformImageListener.onLoadFailure(bitmapWorkerException);
-                        }
-                    }
-                });
+                                                     @Override
+                                                     public void onFailure(@NonNull Exception bitmapWorkerException) {
+                                                         Log.e(TAG, "onFailure: setImageUri", bitmapWorkerException);
+                                                         if (mTransformImageListener != null) {
+                                                             mTransformImageListener.onLoadFailure(bitmapWorkerException);
+                                                         }
+                                                     }
+                                                 });
     }
 
     /**
@@ -175,7 +218,7 @@ public class TransformImageView extends AppCompatImageView {
      */
     public float getMatrixScale(@NonNull Matrix matrix) {
         return (float) Math.sqrt(Math.pow(getMatrixValue(matrix, Matrix.MSCALE_X), 2)
-                + Math.pow(getMatrixValue(matrix, Matrix.MSKEW_Y), 2));
+                                         + Math.pow(getMatrixValue(matrix, Matrix.MSKEW_Y), 2));
     }
 
     /**
@@ -190,7 +233,7 @@ public class TransformImageView extends AppCompatImageView {
      */
     public float getMatrixAngle(@NonNull Matrix matrix) {
         return (float) -(Math.atan2(getMatrixValue(matrix, Matrix.MSKEW_X),
-                getMatrixValue(matrix, Matrix.MSCALE_X)) * (180 / Math.PI));
+                                    getMatrixValue(matrix, Matrix.MSCALE_X)) * (180 / Math.PI));
     }
 
     @Override
