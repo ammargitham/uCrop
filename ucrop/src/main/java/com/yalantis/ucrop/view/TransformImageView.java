@@ -57,7 +57,7 @@ public class TransformImageView extends AppCompatImageView {
 
     private int mMaxBitmapSize = 0;
 
-    private String mImageInputPath, mImageOutputPath;
+    private Uri mImageInputPath, mImageOutputPath;
     private ExifInfo mExifInfo;
 
     /**
@@ -124,11 +124,11 @@ public class TransformImageView extends AppCompatImageView {
         setImageDrawable(new FastBitmapDrawable(bitmap));
     }
 
-    public String getImageInputPath() {
+    public Uri getImageInputPath() {
         return mImageInputPath;
     }
 
-    public String getImageOutputPath() {
+    public Uri getImageOutputPath() {
         return mImageOutputPath;
     }
 
@@ -185,8 +185,8 @@ public class TransformImageView extends AppCompatImageView {
                                                      @Override
                                                      public void onBitmapLoaded(@NonNull Bitmap bitmap,
                                                                                 @NonNull ExifInfo exifInfo,
-                                                                                @NonNull String imageInputPath,
-                                                                                @Nullable String imageOutputPath) {
+                                                                                @NonNull Uri imageInputPath,
+                                                                                @Nullable Uri imageOutputPath) {
                                                          mImageInputPath = imageInputPath;
                                                          mImageOutputPath = imageOutputPath;
                                                          mExifInfo = exifInfo;

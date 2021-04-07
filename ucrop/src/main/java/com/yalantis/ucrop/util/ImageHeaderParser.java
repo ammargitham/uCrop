@@ -30,16 +30,19 @@
 
 package com.yalantis.ucrop.util;
 
+import android.content.Context;
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 import android.util.Log;
+
+import androidx.exifinterface.media.ExifInterface;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
-
-import androidx.exifinterface.media.ExifInterface;
 
 /**
  * A class for parsing the exif orientation from an image header.
@@ -289,8 +292,8 @@ public class ImageHeaderParser {
 
         public RandomAccessReader(byte[] data, int length) {
             this.data = (ByteBuffer) ByteBuffer.wrap(data)
-                    .order(ByteOrder.BIG_ENDIAN)
-                    .limit(length);
+                                               .order(ByteOrder.BIG_ENDIAN)
+                                               .limit(length);
         }
 
         public void order(ByteOrder byteOrder) {
@@ -376,7 +379,7 @@ public class ImageHeaderParser {
         }
     }
 
-    public static void copyExif(ExifInterface originalExif, int width, int height, String imageOutputPath) {
+    public static void copyExif(Context context, ExifInterface originalExif, int width, int height, Uri imageOutputPath) {
         String[] attributes = new String[]{
                 ExifInterface.TAG_F_NUMBER,
                 ExifInterface.TAG_DATETIME,
@@ -403,7 +406,10 @@ public class ImageHeaderParser {
         };
 
         try {
-            ExifInterface newExif = new ExifInterface(imageOutputPath);
+            final ExifInterface newExif;
+            try (final ParcelFileDescriptor parcelFileDescriptor = context.getContentResolver().openFileDescriptor(imageOutputPath, "rw")) {
+                newExif = new ExifInterface(parcelFileDescriptor.getFileDescriptor());
+            }
             String value;
             for (String attribute : attributes) {
                 value = originalExif.getAttribute(attribute);

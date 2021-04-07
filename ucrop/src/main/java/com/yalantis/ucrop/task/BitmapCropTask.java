@@ -6,6 +6,7 @@ import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -21,9 +22,6 @@ import com.yalantis.ucrop.util.FileUtils;
 import com.yalantis.ucrop.util.ImageHeaderParser;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
@@ -51,7 +49,7 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
 
     private final Bitmap.CompressFormat mCompressFormat;
     private final int mCompressQuality;
-    private final String mImageInputPath, mImageOutputPath;
+    private final Uri mImageInputPath, mImageOutputPath;
     private final ExifInfo mExifInfo;
     private final BitmapCropCallback mCropCallback;
 
@@ -115,6 +113,10 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
     }
 
     private boolean crop() throws IOException {
+        final Context context = mContext.get();
+        if (context == null) {
+            throw new NullPointerException("Context is null");
+        }
         // Downsize if needed
         if (mMaxResultImageSizeX > 0 && mMaxResultImageSizeY > 0) {
             float cropWidth = mCropRect.width() / mCurrentScale;
@@ -160,19 +162,22 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
         Log.i(TAG, "Should crop: " + shouldCrop);
 
         if (shouldCrop) {
-            ExifInterface originalExif = new ExifInterface(mImageInputPath);
+            final ExifInterface originalExif;
+            try (ParcelFileDescriptor parcelFileDescriptor = context.getContentResolver().openFileDescriptor(mImageInputPath, "r")) {
+                originalExif = new ExifInterface(parcelFileDescriptor.getFileDescriptor());
+            }
             saveImage(Bitmap.createBitmap(mViewBitmap, cropOffsetX, cropOffsetY, mCroppedImageWidth, mCroppedImageHeight));
             if (mCompressFormat.equals(Bitmap.CompressFormat.JPEG)) {
-                ImageHeaderParser.copyExif(originalExif, mCroppedImageWidth, mCroppedImageHeight, mImageOutputPath);
+                ImageHeaderParser.copyExif(context, originalExif, mCroppedImageWidth, mCroppedImageHeight, mImageOutputPath);
             }
             return true;
         } else {
-            FileUtils.copyFile(mImageInputPath, mImageOutputPath);
+            FileUtils.copyFile(context, mImageInputPath, mImageOutputPath);
             return false;
         }
     }
 
-    private void saveImage(@NonNull Bitmap croppedBitmap) throws FileNotFoundException {
+    private void saveImage(@NonNull Bitmap croppedBitmap) {
         Context context = mContext.get();
         if (context == null) {
             return;
@@ -181,7 +186,7 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
         OutputStream outputStream = null;
         ByteArrayOutputStream outStream = null;
         try {
-            outputStream = new FileOutputStream(new File(mImageOutputPath), false);
+            outputStream = context.getContentResolver().openOutputStream(mImageOutputPath);
             outStream = new ByteArrayOutputStream();
             croppedBitmap.compress(mCompressFormat, mCompressQuality, outStream);
             outputStream.write(outStream.toByteArray());
@@ -217,9 +222,8 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
     protected void onPostExecute(@Nullable Throwable t) {
         if (mCropCallback != null) {
             if (t == null) {
-                Uri uri = Uri.fromFile(new File(mImageOutputPath));
                 mCropCallback.onBitmapCropped(
-                        uri,
+                        mImageOutputPath,
                         cropOffsetX,
                         cropOffsetY,
                         mCroppedImageWidth,

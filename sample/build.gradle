@@ -1,19 +1,19 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 29
+    compileSdkVersion 30
     buildToolsVersion '29.0.3'
     defaultConfig {
         applicationId "com.yalantis.ucrop.sample"
         minSdkVersion 21
-        targetSdkVersion 29
-        versionCode 13
-        versionName "1.2.4"
+        targetSdkVersion 30
+        versionCode 14
+        versionName "1.3"
     }
     flavorDimensions "default"
     buildTypes {
         debug {
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
 
@@ -43,5 +43,6 @@ dependencies {
     implementation "androidx.appcompat:appcompat:1.1.0"
     implementation "androidx.core:core:1.1.0"
     implementation "androidx.constraintlayout:constraintlayout:1.1.3"
+    implementation "androidx.documentfile:documentfile:1.0.1"
     implementation project(':ucrop')
 }

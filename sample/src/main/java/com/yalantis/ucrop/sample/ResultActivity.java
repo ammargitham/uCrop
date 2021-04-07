@@ -1,20 +1,16 @@
 package com.yalantis.ucrop.sample;
 
-import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -22,22 +18,10 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.content.FileProvider;
 
 import com.yalantis.ucrop.view.UCropView;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.nio.channels.FileChannel;
-import java.util.Calendar;
-import java.util.List;
-
-import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
-import static android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+import java.io.IOException;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -76,15 +60,17 @@ public class ResultActivity extends BaseActivity {
         }
         final BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(new File(getIntent().getData().getPath()).getAbsolutePath(), options);
-
-        isLocalImage = getIntent().getBooleanExtra(EXTRA_IS_LOCAL_IMAGE, false);
-
-        setSupportActionBar((Toolbar) findViewById(R.id.toolbar));
-        final ActionBar actionBar = getSupportActionBar();
-        if (actionBar != null) {
-            actionBar.setDisplayHomeAsUpEnabled(true);
-            actionBar.setTitle(getString(R.string.format_crop_result_d_d, options.outWidth, options.outHeight));
+        try (final ParcelFileDescriptor parcelFileDescriptor = getContentResolver().openFileDescriptor(uri, "r")) {
+            BitmapFactory.decodeFileDescriptor(parcelFileDescriptor.getFileDescriptor(), null, options);
+            isLocalImage = getIntent().getBooleanExtra(EXTRA_IS_LOCAL_IMAGE, false);
+            setSupportActionBar(findViewById(R.id.toolbar));
+            final ActionBar actionBar = getSupportActionBar();
+            if (actionBar != null) {
+                actionBar.setDisplayHomeAsUpEnabled(true);
+                actionBar.setTitle(getString(R.string.format_crop_result_d_d, options.outWidth, options.outHeight));
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "onCreate: ", e);
         }
     }
 
@@ -99,7 +85,7 @@ public class ResultActivity extends BaseActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_download) {
-            saveCroppedImage();
+            // saveCroppedImage();
         } else if (item.getItemId() == R.id.menu_edit) {
             setResult(SampleActivity.RESULT_EDIT);
             finish();
@@ -115,99 +101,99 @@ public class ResultActivity extends BaseActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
-            case REQUEST_STORAGE_WRITE_ACCESS_PERMISSION:
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    saveCroppedImage();
-                }
-                break;
+            // case REQUEST_STORAGE_WRITE_ACCESS_PERMISSION:
+            //     if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // saveCroppedImage();
+            // }
+            // break;
             default:
                 super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
     }
 
-    private void saveCroppedImage() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    getString(R.string.permission_write_storage_rationale),
-                    REQUEST_STORAGE_WRITE_ACCESS_PERMISSION);
-        } else {
-            Uri imageUri = getIntent().getData();
-            if (imageUri != null && imageUri.getScheme().equals("file")) {
-                try {
-                    copyFileToDownloads(getIntent().getData());
-                } catch (Exception e) {
-                    Toast.makeText(ResultActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
-                    Log.e(TAG, imageUri.toString(), e);
-                }
-            } else {
-                Toast.makeText(ResultActivity.this, getString(R.string.toast_unexpected_error), Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
+    // private void saveCroppedImage() {
+    //     if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    //             != PackageManager.PERMISSION_GRANTED) {
+    //         requestPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE,
+    //                           getString(R.string.permission_write_storage_rationale),
+    //                           REQUEST_STORAGE_WRITE_ACCESS_PERMISSION);
+    //     } else {
+    //         Uri imageUri = getIntent().getData();
+    //         if (imageUri != null && imageUri.getScheme().equals("file")) {
+    //             try {
+    //                 copyFileToDownloads(getIntent().getData());
+    //             } catch (Exception e) {
+    //                 Toast.makeText(ResultActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+    //                 Log.e(TAG, imageUri.toString(), e);
+    //             }
+    //         } else {
+    //             Toast.makeText(ResultActivity.this, getString(R.string.toast_unexpected_error), Toast.LENGTH_SHORT).show();
+    //         }
+    //     }
+    // }
 
-    private void copyFileToDownloads(Uri croppedFileUri) throws Exception {
-        String downloadsDirectoryPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath();
-        String filename = String.format("%d_%s", Calendar.getInstance().getTimeInMillis(), croppedFileUri.getLastPathSegment());
+    // private void copyFileToDownloads(Uri croppedFileUri) throws Exception {
+    //     String downloadsDirectoryPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath();
+    //     String filename = String.format(Locale.ENGLISH, "%d_%s", Calendar.getInstance().getTimeInMillis(), croppedFileUri.getLastPathSegment());
+    //
+    //     File saveFile = new File(downloadsDirectoryPath, filename);
+    //
+    //     FileInputStream inStream = new FileInputStream(new File(croppedFileUri.getPath()));
+    //     FileOutputStream outStream = new FileOutputStream(saveFile);
+    //     FileChannel inChannel = inStream.getChannel();
+    //     FileChannel outChannel = outStream.getChannel();
+    //     inChannel.transferTo(0, inChannel.size(), outChannel);
+    //     inStream.close();
+    //     outStream.close();
+    //
+    //     showNotification(saveFile);
+    //     Toast.makeText(this, R.string.notification_image_saved, Toast.LENGTH_SHORT).show();
+    //     finish();
+    // }
 
-        File saveFile = new File(downloadsDirectoryPath, filename);
-
-        FileInputStream inStream = new FileInputStream(new File(croppedFileUri.getPath()));
-        FileOutputStream outStream = new FileOutputStream(saveFile);
-        FileChannel inChannel = inStream.getChannel();
-        FileChannel outChannel = outStream.getChannel();
-        inChannel.transferTo(0, inChannel.size(), outChannel);
-        inStream.close();
-        outStream.close();
-
-        showNotification(saveFile);
-        Toast.makeText(this, R.string.notification_image_saved, Toast.LENGTH_SHORT).show();
-        finish();
-    }
-
-    private void showNotification(@NonNull File file) {
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        Uri fileUri = FileProvider.getUriForFile(
-                this,
-                getString(R.string.file_provider_authorities),
-                file);
-
-        intent.setDataAndType(fileUri, "image/*");
-
-        List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(
-                intent,
-                PackageManager.MATCH_DEFAULT_ONLY);
-        for (ResolveInfo info : resInfoList) {
-            grantUriPermission(
-                    info.activityInfo.packageName,
-                    fileUri, FLAG_GRANT_WRITE_URI_PERMISSION | FLAG_GRANT_READ_URI_PERMISSION);
-        }
-
-        NotificationCompat.Builder notificationBuilder;
-        NotificationManager notificationManager = (NotificationManager) this
-                .getSystemService(Context.NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(createChannel());
-            }
-            notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID);
-        } else {
-            notificationBuilder = new NotificationCompat.Builder(this);
-        }
-
-        notificationBuilder
-                .setContentTitle(getString(R.string.app_name))
-                .setContentText(getString(R.string.notification_image_saved_click_to_preview))
-                .setTicker(getString(R.string.notification_image_saved))
-                .setSmallIcon(R.drawable.ic_done)
-                .setOngoing(false)
-                .setContentIntent(PendingIntent.getActivity(this, 0, intent, 0))
-                .setAutoCancel(true);
-        if (notificationManager != null) {
-            notificationManager.notify(DOWNLOAD_NOTIFICATION_ID_DONE, notificationBuilder.build());
-        }
-    }
+    // private void showNotification(@NonNull File file) {
+    //     Intent intent = new Intent(Intent.ACTION_VIEW);
+    //     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    //     Uri fileUri = FileProvider.getUriForFile(
+    //             this,
+    //             getString(R.string.file_provider_authorities),
+    //             file);
+    //
+    //     intent.setDataAndType(fileUri, "image/*");
+    //
+    //     List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(
+    //             intent,
+    //             PackageManager.MATCH_DEFAULT_ONLY);
+    //     for (ResolveInfo info : resInfoList) {
+    //         grantUriPermission(
+    //                 info.activityInfo.packageName,
+    //                 fileUri, FLAG_GRANT_WRITE_URI_PERMISSION | FLAG_GRANT_READ_URI_PERMISSION);
+    //     }
+    //
+    //     NotificationCompat.Builder notificationBuilder;
+    //     NotificationManager notificationManager = (NotificationManager) this
+    //             .getSystemService(Context.NOTIFICATION_SERVICE);
+    //     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    //         if (notificationManager != null) {
+    //             notificationManager.createNotificationChannel(createChannel());
+    //         }
+    //         notificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID);
+    //     } else {
+    //         notificationBuilder = new NotificationCompat.Builder(this);
+    //     }
+    //
+    //     notificationBuilder
+    //             .setContentTitle(getString(R.string.app_name))
+    //             .setContentText(getString(R.string.notification_image_saved_click_to_preview))
+    //             .setTicker(getString(R.string.notification_image_saved))
+    //             .setSmallIcon(R.drawable.ic_done)
+    //             .setOngoing(false)
+    //             .setContentIntent(PendingIntent.getActivity(this, 0, intent, 0))
+    //             .setAutoCancel(true);
+    //     if (notificationManager != null) {
+    //         notificationManager.notify(DOWNLOAD_NOTIFICATION_ID_DONE, notificationBuilder.build());
+    //     }
+    // }
 
     @TargetApi(Build.VERSION_CODES.O)
     public NotificationChannel createChannel() {

@@ -17,6 +17,7 @@
 package com.yalantis.ucrop.util;
 
 import android.annotation.SuppressLint;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
@@ -28,14 +29,12 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Log;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.util.Locale;
-
 import androidx.annotation.NonNull;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Locale;
 
 /**
  * @author Peli
@@ -109,7 +108,7 @@ public class FileUtils {
 
         try {
             cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs,
-                    null);
+                                                        null);
             if (cursor != null && cursor.moveToFirst()) {
                 final int column_index = cursor.getColumnIndexOrThrow(column);
                 return cursor.getString(column_index);
@@ -216,21 +215,28 @@ public class FileUtils {
      * will cause both files to become null.
      * Simply skipping this step if the paths are identical.
      */
-    public static void copyFile(@NonNull String pathFrom, @NonNull String pathTo) throws IOException {
-        if (pathFrom.equalsIgnoreCase(pathTo)) {
+    public static void copyFile(@NonNull Context context, @NonNull Uri pathFrom, @NonNull Uri pathTo) throws IOException {
+        if (pathFrom.equals(pathTo)) {
             return;
         }
-
-        FileChannel outputChannel = null;
-        FileChannel inputChannel = null;
+        InputStream inputStream = null;
+        OutputStream outputStream = null;
         try {
-            inputChannel = new FileInputStream(new File(pathFrom)).getChannel();
-            outputChannel = new FileOutputStream(new File(pathTo)).getChannel();
-            inputChannel.transferTo(0, inputChannel.size(), outputChannel);
-            inputChannel.close();
+            final ContentResolver contentResolver = context.getContentResolver();
+            inputStream = contentResolver.openInputStream(pathFrom);
+            outputStream = contentResolver.openOutputStream(pathTo);
+            byte[] buf = new byte[8192];
+            int length;
+            while ((length = inputStream.read(buf)) > 0) {
+                outputStream.write(buf, 0, length);
+            }
         } finally {
-            if (inputChannel != null) inputChannel.close();
-            if (outputChannel != null) outputChannel.close();
+            if (inputStream != null) {
+                inputStream.close();
+            }
+            if (outputStream != null) {
+                outputStream.close();
+            }
         }
     }
 

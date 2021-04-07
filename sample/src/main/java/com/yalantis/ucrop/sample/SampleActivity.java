@@ -39,10 +39,6 @@ import com.yalantis.ucrop.UCropActivity;
 import com.yalantis.ucrop.UCropFragment;
 import com.yalantis.ucrop.UCropFragmentCallback;
 
-import java.io.File;
-import java.util.Locale;
-import java.util.Random;
-
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
  */
@@ -55,7 +51,8 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private static final int REQUEST_SELECT_PICTURE = 0x01;
     private static final int REQUEST_SELECT_PICTURE_FOR_FRAGMENT = 0x02;
     private static final int REQUEST_VIEW_EDIT = 0x03;
-    private static final String SAMPLE_CROPPED_IMAGE_NAME = "SampleCropImage";
+    private static final String SAMPLE_CROPPED_IMAGE_NAME = "SampleCropImage.jpg";
+    private static final int CREATE_FILE_REQUEST_CODE = 0x04;
 
     private RadioGroup mRadioGroupAspectRatio, mRadioGroupCompressionSettings;
     private EditText mEditTextMaxWidth, mEditTextMaxHeight;
@@ -84,6 +81,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private int mToolbarWidgetColor;
 
     private SavedImageState mSavedImageState;
+    private Uri selectedUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,9 +94,10 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (resultCode == RESULT_OK) {
             if (requestCode == requestMode) {
-                final Uri selectedUri = data.getData();
+                selectedUri = data.getData();
                 if (selectedUri != null) {
-                    startCrop(selectedUri, true);
+                    createFile(SAMPLE_CROPPED_IMAGE_NAME);
+                    // startCrop(selectedUri, true);
                 } else {
                     Toast.makeText(SampleActivity.this, R.string.toast_cannot_retrieve_selected_image, Toast.LENGTH_SHORT).show();
                 }
@@ -112,6 +111,10 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
             if (resultCode == RESULT_EDIT) {
                 resumeCrop();
             }
+        }
+
+        if (requestCode == CREATE_FILE_REQUEST_CODE && data.getData() != null) {
+            startCrop(selectedUri, data.getData(), true);
         }
 
         if (resultCode == UCrop.RESULT_ERROR) {
@@ -183,19 +186,19 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 pickFromGallery();
             }
         });
-        findViewById(R.id.button_random_image).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Random random = new Random();
-                int minSizePixels = 800;
-                int maxSizePixels = 2400;
-                Uri uri = Uri.parse(String.format(Locale.getDefault(), "https://unsplash.it/%d/%d/?random",
-                                                  minSizePixels + random.nextInt(maxSizePixels - minSizePixels),
-                                                  minSizePixels + random.nextInt(maxSizePixels - minSizePixels)));
-
-                startCrop(uri, false);
-            }
-        });
+        // findViewById(R.id.button_random_image).setOnClickListener(new View.OnClickListener() {
+        //     @Override
+        //     public void onClick(View v) {
+        //         Random random = new Random();
+        //         int minSizePixels = 800;
+        //         int maxSizePixels = 2400;
+        //         Uri uri = Uri.parse(String.format(Locale.getDefault(), "https://unsplash.it/%d/%d/?random",
+        //                                           minSizePixels + random.nextInt(maxSizePixels - minSizePixels),
+        //                                           minSizePixels + random.nextInt(maxSizePixels - minSizePixels)));
+        //
+        //         startCrop(uri, false);
+        //     }
+        // });
         settingsView = findViewById(R.id.settings);
         mRadioGroupAspectRatio = findViewById(R.id.radio_group_aspect_ratio);
         mRadioGroupCompressionSettings = findViewById(R.id.radio_group_compression_settings);
@@ -247,26 +250,22 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
                 .setType("image/*")
                 .addCategory(Intent.CATEGORY_OPENABLE);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            String[] mimeTypes = {"image/jpeg", "image/png"};
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-        }
+        String[] mimeTypes = {"image/jpeg", "image/png"};
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
 
         startActivityForResult(Intent.createChooser(intent, getString(R.string.label_select_picture)), requestMode);
     }
 
-    private void startCrop(@NonNull Uri originUri, boolean isLocalImage) {
-        String destinationFileName = SAMPLE_CROPPED_IMAGE_NAME;
-        switch (mRadioGroupCompressionSettings.getCheckedRadioButtonId()) {
-            case R.id.radio_png:
-                destinationFileName += ".png";
-                break;
-            case R.id.radio_jpeg:
-                destinationFileName += ".jpg";
-                break;
-        }
+    private void startCrop(@NonNull Uri originUri, @NonNull Uri destinationUri, boolean isLocalImage) {
+        // String destinationFileName = SAMPLE_CROPPED_IMAGE_NAME;
+        // int checkedRadioButtonId = mRadioGroupCompressionSettings.getCheckedRadioButtonId();
+        // if (checkedRadioButtonId == R.id.radio_png) {
+        //     destinationFileName += ".png";
+        // } else if (checkedRadioButtonId == R.id.radio_jpeg) {
+        //     destinationFileName += ".jpg";
+        // }
 
-        Uri destinationUri = Uri.fromFile(new File(getCacheDir(), destinationFileName));
+        // Uri destinationUri = Uri.fromFile(new File(getCacheDir(), destinationFileName));
         UCrop uCrop = UCrop.of(originUri, destinationUri);
 
         uCrop = basisConfig(uCrop);
@@ -285,6 +284,14 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
             uCrop.start(SampleActivity.this);
         }
 
+    }
+
+    private void createFile(@NonNull final String fileName) {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/jpg");
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
     }
 
     /**
