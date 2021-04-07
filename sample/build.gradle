@@ -46,3 +46,9 @@ dependencies {
     implementation "androidx.documentfile:documentfile:1.0.1"
     implementation project(':ucrop')
 }
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs << '-Xlint:unchecked'
+    options.compilerArgs << '-Xlint:deprecation'
+    options.deprecation = true
+}

@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -13,6 +12,7 @@ import androidx.annotation.Nullable;
 
 import com.yalantis.ucrop.callback.BitmapLoadCallback;
 import com.yalantis.ucrop.model.ExifInfo;
+import com.yalantis.ucrop.util.AppExecutors;
 import com.yalantis.ucrop.util.BitmapLoadUtils;
 
 import java.io.IOException;
@@ -24,7 +24,7 @@ import java.io.OutputStream;
  * inSampleSize is calculated based on requiredWidth property. However can be adjusted if OOM occurs.
  * If any EXIF config is found - bitmap is transformed properly.
  */
-public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapWorkerResult> {
+public class BitmapLoadTask {
 
     private static final String TAG = "BitmapWorkerTask";
 
@@ -68,9 +68,14 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
         mBitmapLoadCallback = loadCallback;
     }
 
-    @Override
-    @NonNull
-    protected BitmapWorkerResult doInBackground(Void... params) {
+    public void execute() {
+        AppExecutors.getInstance().tasksThread().execute(() -> {
+            final BitmapWorkerResult result = doInBackground();
+            AppExecutors.getInstance().mainThread().execute(() -> onPostExecute(result));
+        });
+    }
+
+    private BitmapWorkerResult doInBackground() {
         if (mInputUri == null) {
             return new BitmapWorkerResult(new NullPointerException("Input Uri cannot be null"));
         }
@@ -186,8 +191,7 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
         }
     }
 
-    @Override
-    protected void onPostExecute(@NonNull BitmapWorkerResult result) {
+    private void onPostExecute(@NonNull BitmapWorkerResult result) {
         if (result.mBitmapWorkerException == null) {
             mBitmapLoadCallback.onBitmapLoaded(result.mBitmapResult, result.mExifInfo, mInputUri, mOutputUri);
         } else {

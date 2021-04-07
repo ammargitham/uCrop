@@ -2,7 +2,6 @@ package com.yalantis.ucrop.sample;
 
 import android.annotation.TargetApi;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.PorterDuff;
 import android.graphics.RectF;
@@ -124,21 +123,21 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    /**
-     * Callback received when a permissions request has been completed.
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case REQUEST_STORAGE_READ_ACCESS_PERMISSION:
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    pickFromGallery();
-                }
-                break;
-            default:
-                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
-    }
+    // /**
+    //  * Callback received when a permissions request has been completed.
+    //  */
+    // @Override
+    // public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    //     switch (requestCode) {
+    //         case REQUEST_STORAGE_READ_ACCESS_PERMISSION:
+    //             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+    //                 pickFromGallery();
+    //             }
+    //             break;
+    //         default:
+    //             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    //     }
+    // }
 
 
     private TextWatcher mAspectRatioTextWatcher = new TextWatcher() {
@@ -178,7 +177,6 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
         }
     };
 
-    @SuppressWarnings("ConstantConditions")
     private void setupUI() {
         findViewById(R.id.button_crop).setOnClickListener(new View.OnClickListener() {
             @Override

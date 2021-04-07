@@ -6,7 +6,6 @@ import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
-import android.os.AsyncTask;
 import android.util.AttributeSet;
 
 import androidx.annotation.IntRange;
@@ -93,8 +92,7 @@ public class CropImageView extends TransformImageView {
                 getImageOutputPath(),
                 getExifInfo());
 
-        new BitmapCropTask(getContext(), getViewBitmap(), imageState, cropParameters, cropCallback)
-                .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+        new BitmapCropTask(getContext(), getViewBitmap(), imageState, cropParameters, cropCallback).execute();
     }
 
     /**
