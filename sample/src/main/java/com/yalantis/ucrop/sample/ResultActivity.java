@@ -1,9 +1,7 @@
 package com.yalantis.ucrop.sample;
 
-import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
@@ -15,8 +13,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.ActivityCompat;
 
 import com.yalantis.ucrop.util.BitmapLoadUtils;
 import com.yalantis.ucrop.view.UCropView;
@@ -31,8 +27,8 @@ import java.io.InputStream;
 public class ResultActivity extends BaseActivity {
 
     private static final String TAG = "ResultActivity";
-    private static final String CHANNEL_ID = "3000";
-    private static final int DOWNLOAD_NOTIFICATION_ID_DONE = 911;
+    // private static final String CHANNEL_ID = "3000";
+    // private static final int DOWNLOAD_NOTIFICATION_ID_DONE = 911;
 
     public static final String EXTRA_IS_LOCAL_IMAGE = "extra_is_local_image";
     private boolean isLocalImage;
@@ -87,7 +83,7 @@ public class ResultActivity extends BaseActivity {
             height = options.outHeight;
         }
 
-        setSupportActionBar((Toolbar) findViewById(R.id.toolbar));
+        setSupportActionBar(findViewById(R.id.toolbar));
         final ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) {
             actionBar.setDisplayHomeAsUpEnabled(true);
@@ -116,37 +112,13 @@ public class ResultActivity extends BaseActivity {
         return super.onOptionsItemSelected(item);
     }
 
-
-    /**
-     * Callback received when a permissions request has been completed.
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case REQUEST_STORAGE_WRITE_ACCESS_PERMISSION:
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    saveCroppedImage();
-                }
-                break;
-            default:
-                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
-    }
-
     private void saveCroppedImage() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                              getString(R.string.permission_write_storage_rationale),
-                              REQUEST_STORAGE_WRITE_ACCESS_PERMISSION);
+        Uri imageUri = getIntent().getData();
+        if (BitmapLoadUtils.hasContentScheme(imageUri)) {
+            Toast.makeText(ResultActivity.this, getString(R.string.toast_already_saved), Toast.LENGTH_SHORT).show();
+            finish();
         } else {
-            Uri imageUri = getIntent().getData();
-            if (BitmapLoadUtils.hasContentScheme(imageUri)) {
-                Toast.makeText(ResultActivity.this, getString(R.string.toast_already_saved), Toast.LENGTH_SHORT).show();
-                finish();
-            } else {
-                Toast.makeText(ResultActivity.this, getString(R.string.toast_unexpected_error), Toast.LENGTH_SHORT).show();
-            }
+            Toast.makeText(ResultActivity.this, getString(R.string.toast_unexpected_error), Toast.LENGTH_SHORT).show();
         }
     }
 }

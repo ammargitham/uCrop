@@ -7,7 +7,6 @@ import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Point;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
@@ -37,8 +36,7 @@ public class BitmapLoadUtils {
                                                 int requiredWidth, int requiredHeight,
                                                 BitmapLoadCallback loadCallback) {
 
-        new BitmapLoadTask(context, uri, outputUri, requiredWidth, requiredHeight, loadCallback)
-                .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+        new BitmapLoadTask(context, uri, outputUri, requiredWidth, requiredHeight, loadCallback).execute();
     }
 
     public static Bitmap transformBitmap(@NonNull Bitmap bitmap, @NonNull Matrix transformMatrix) {
@@ -127,7 +125,6 @@ public class BitmapLoadUtils {
      *
      * @return - max bitmap size in pixels.
      */
-    @SuppressWarnings({"SuspiciousNameCombination", "deprecation"})
     public static int calculateMaxBitmapSize(@NonNull Context context) {
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         Display display;
@@ -164,7 +161,7 @@ public class BitmapLoadUtils {
 
     @SuppressWarnings("ConstantConditions")
     public static void close(@Nullable Closeable c) {
-        if (c != null && c instanceof Closeable) { // java.lang.IncompatibleClassChangeError: interface not implemented
+        if (c instanceof Closeable) { // java.lang.IncompatibleClassChangeError: interface not implemented
             try {
                 c.close();
             } catch (IOException e) {

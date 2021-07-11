@@ -1,8 +1,8 @@
 package com.yalantis.ucrop.sample;
 
 import android.annotation.TargetApi;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.PorterDuff;
 import android.graphics.RectF;
@@ -53,7 +53,6 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
     public static final int RESULT_EDIT = 10001;
 
-    private static final int REQUEST_SELECT_PICTURE = 0x01;
     private static final int REQUEST_SELECT_PICTURE_FOR_FRAGMENT = 0x02;
     private static final int DESTINATION_IMAGE_FILE_REQUEST_CODE = 0x03;
     private static final int REQUEST_VIEW_EDIT = 0x04;
@@ -69,7 +68,7 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
     private CheckBox mCheckBoxFreeStyleCrop;
     private Toolbar toolbar;
     private ScrollView settingsView;
-    private int requestMode = BuildConfig.RequestMode;
+    private final int requestMode = BuildConfig.RequestMode;
 
     private UCropFragment fragment;
     private boolean mShowLoader;
@@ -129,22 +128,6 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
 
         if (resultCode == UCrop.RESULT_ERROR) {
             handleCropError(data);
-        }
-    }
-
-    /**
-     * Callback received when a permissions request has been completed.
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case REQUEST_STORAGE_READ_ACCESS_PERMISSION:
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    pickFromGallery();
-                }
-                break;
-            default:
-                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
     }
 
@@ -222,13 +205,14 @@ public class SampleActivity extends BaseActivity implements UCropFragmentCallbac
             createDocumentIntent.setType(mimeType);
             createDocumentIntent.putExtra(Intent.EXTRA_TITLE, destinationFileName);
 
-            if (createDocumentIntent.resolveActivity(getPackageManager()) != null) {
-
+            try {
                 startActivityForResult(createDocumentIntent, DESTINATION_IMAGE_FILE_REQUEST_CODE);
-            } else {
+            } catch (ActivityNotFoundException e) {
                 Toast.makeText(SampleActivity.this,
                                R.string.no_file_chooser_error,
                                Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Log.e(TAG, "onClick: ", e);
             }
         }
     }

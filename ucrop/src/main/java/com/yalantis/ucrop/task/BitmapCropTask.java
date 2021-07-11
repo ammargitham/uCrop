@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.util.Log;
 
@@ -17,6 +16,7 @@ import com.yalantis.ucrop.callback.BitmapCropCallback;
 import com.yalantis.ucrop.model.CropParameters;
 import com.yalantis.ucrop.model.ExifInfo;
 import com.yalantis.ucrop.model.ImageState;
+import com.yalantis.ucrop.util.AppExecutors;
 import com.yalantis.ucrop.util.BitmapLoadUtils;
 import com.yalantis.ucrop.util.FileUtils;
 import com.yalantis.ucrop.util.ImageHeaderParser;
@@ -33,7 +33,7 @@ import java.lang.ref.WeakReference;
  * Then image is rotated accordingly.
  * Finally new Bitmap object is created and saved to file.
  */
-public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
+public class BitmapCropTask {
 
     private static final String TAG = "BitmapCropTask";
 
@@ -46,20 +46,25 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
     private final RectF mCropRect;
     private final RectF mCurrentImageRect;
 
-    private float mCurrentScale, mCurrentAngle;
-    private final int mMaxResultImageSizeX, mMaxResultImageSizeY;
+    private float mCurrentScale;
+    private final float mCurrentAngle;
+    private final int mMaxResultImageSizeX;
+    private final int mMaxResultImageSizeY;
 
     private final Bitmap.CompressFormat mCompressFormat;
     private final int mCompressQuality;
-    private final String mImageInputPath, mImageOutputPath;
-    private final Uri mImageInputUri, mImageOutputUri;
-    private final ExifInfo mExifInfo;
+    private final String mImageInputPath;
+    private final String mImageOutputPath;
+    private final Uri mImageInputUri;
+    private final Uri mImageOutputUri;
     private final BitmapCropCallback mCropCallback;
 
-    private int mCroppedImageWidth, mCroppedImageHeight;
-    private int cropOffsetX, cropOffsetY;
+    private int mCroppedImageWidth;
+    private int mCroppedImageHeight;
+    private int cropOffsetX;
+    private int cropOffsetY;
 
-    private float[] imageMatrixValues;
+    private final float[] imageMatrixValues;
 
     public BitmapCropTask(@NonNull Context context,
                           @Nullable Bitmap viewBitmap,
@@ -85,7 +90,7 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
         mImageOutputPath = cropParameters.getImageOutputPath();
         mImageInputUri = cropParameters.getContentImageInputUri();
         mImageOutputUri = cropParameters.getContentImageOutputUri();
-        mExifInfo = cropParameters.getExifInfo();
+        final ExifInfo mExifInfo = cropParameters.getExifInfo();
 
         // azri92 - Get image matrix & crop rect values to be included in result
         imageMatrixValues = new float[9];
@@ -94,35 +99,45 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
         mCropCallback = cropCallback;
     }
 
-    @Override
-    @Nullable
-    protected Throwable doInBackground(Void... params) {
-        if (mViewBitmap == null) {
-            return new NullPointerException("ViewBitmap is null");
-        } else if (mViewBitmap.isRecycled()) {
-            return new NullPointerException("ViewBitmap is recycled");
-        } else if (mCurrentImageRect.isEmpty()) {
-            return new NullPointerException("CurrentImageRect is empty");
-        }
+    public void execute() {
+        AppExecutors.getInstance().tasksThread().execute(() -> {
+            try {
+                if (mViewBitmap == null) {
+                    throw new NullPointerException("ViewBitmap is null");
+                } else if (mViewBitmap.isRecycled()) {
+                    throw new NullPointerException("ViewBitmap is recycled");
+                } else if (mCurrentImageRect.isEmpty()) {
+                    throw new NullPointerException("CurrentImageRect is empty");
+                }
 
-        if (mImageOutputUri == null) {
-            return new NullPointerException("ImageOutputUri is null");
-        }
-
-        try {
-            crop();
-            mViewBitmap = null;
-        } catch (Throwable throwable) {
-            return throwable;
-        }
-
-        return null;
+                if (mImageOutputUri == null) {
+                    throw new NullPointerException("ImageOutputUri is null");
+                }
+                crop();
+                mViewBitmap = null;
+                if (mCropCallback != null) {
+                    AppExecutors.getInstance().mainThread().execute(() -> mCropCallback.onBitmapCropped(
+                            mImageOutputUri,
+                            cropOffsetX,
+                            cropOffsetY,
+                            mCroppedImageWidth,
+                            mCroppedImageHeight,
+                            imageMatrixValues,
+                            mCropRect
+                    ));
+                }
+            } catch (Throwable throwable) {
+                if (mCropCallback != null) {
+                    AppExecutors.getInstance().mainThread().execute(() -> mCropCallback.onCropFailure(throwable));
+                }
+            }
+        });
     }
 
-    private boolean crop() throws IOException {
+    private void crop() throws IOException {
         Context context = mContext.get();
         if (context == null) {
-            return false;
+            return;
         }
 
         // Downsize if needed
@@ -136,14 +151,16 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
                 float scaleY = mMaxResultImageSizeY / cropHeight;
                 float resizeScale = Math.min(scaleX, scaleY);
 
-                Bitmap resizedBitmap = Bitmap.createScaledBitmap(mViewBitmap,
-                                                                 Math.round(mViewBitmap.getWidth() * resizeScale),
-                                                                 Math.round(mViewBitmap.getHeight() * resizeScale), false);
+                Bitmap resizedBitmap = Bitmap.createScaledBitmap(
+                        mViewBitmap,
+                        Math.round(mViewBitmap.getWidth() * resizeScale),
+                        Math.round(mViewBitmap.getHeight() * resizeScale),
+                        false
+                );
                 if (mViewBitmap != resizedBitmap) {
                     mViewBitmap.recycle();
                 }
                 mViewBitmap = resizedBitmap;
-
                 mCurrentScale /= resizeScale;
             }
         }
@@ -152,9 +169,15 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
         if (mCurrentAngle != 0) {
             Matrix tempMatrix = new Matrix();
             tempMatrix.setRotate(mCurrentAngle, mViewBitmap.getWidth() / 2F, mViewBitmap.getHeight() / 2F);
-
-            Bitmap rotatedBitmap = Bitmap.createBitmap(mViewBitmap, 0, 0, mViewBitmap.getWidth(), mViewBitmap.getHeight(),
-                                                       tempMatrix, true);
+            Bitmap rotatedBitmap = Bitmap.createBitmap(
+                    mViewBitmap,
+                    0,
+                    0,
+                    mViewBitmap.getWidth(),
+                    mViewBitmap.getHeight(),
+                    tempMatrix,
+                    true
+            );
             if (mViewBitmap != rotatedBitmap) {
                 mViewBitmap.recycle();
             }
@@ -169,15 +192,13 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
         boolean shouldCrop = shouldCrop(mCroppedImageWidth, mCroppedImageHeight);
         Log.i(TAG, "Should crop: " + shouldCrop);
 
-        if (shouldCrop) {
-            saveImage(Bitmap.createBitmap(mViewBitmap, cropOffsetX, cropOffsetY, mCroppedImageWidth, mCroppedImageHeight));
-            if (mCompressFormat.equals(Bitmap.CompressFormat.JPEG)) {
-                copyExifForOutputFile(context);
-            }
-            return true;
-        } else {
+        if (!shouldCrop) {
             FileUtils.copyFile(context, mImageInputUri, mImageOutputUri);
-            return false;
+            return;
+        }
+        saveImage(Bitmap.createBitmap(mViewBitmap, cropOffsetX, cropOffsetY, mCroppedImageWidth, mCroppedImageHeight));
+        if (mCompressFormat.equals(Bitmap.CompressFormat.JPEG)) {
+            copyExifForOutputFile(context);
         }
     }
 
@@ -252,22 +273,4 @@ public class BitmapCropTask extends AsyncTask<Void, Void, Throwable> {
                 || Math.abs(mCropRect.right - mCurrentImageRect.right) > pixelError
                 || mCurrentAngle != 0;
     }
-
-    @Override
-    protected void onPostExecute(@Nullable Throwable t) {
-        if (mCropCallback != null) {
-            if (t == null) {
-                mCropCallback.onBitmapCropped(mImageOutputUri,
-                                              cropOffsetX,
-                                              cropOffsetY,
-                                              mCroppedImageWidth,
-                                              mCroppedImageHeight,
-                                              imageMatrixValues,
-                                              mCropRect);
-            } else {
-                mCropCallback.onCropFailure(t);
-            }
-        }
-    }
-
 }

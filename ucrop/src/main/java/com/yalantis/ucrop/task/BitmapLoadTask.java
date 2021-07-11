@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -14,6 +13,7 @@ import androidx.annotation.Nullable;
 import com.yalantis.ucrop.OkHttpClientStore;
 import com.yalantis.ucrop.callback.BitmapLoadCallback;
 import com.yalantis.ucrop.model.ExifInfo;
+import com.yalantis.ucrop.util.AppExecutors;
 import com.yalantis.ucrop.util.BitmapLoadUtils;
 
 import java.io.IOException;
@@ -24,6 +24,7 @@ import java.lang.ref.WeakReference;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 import okio.BufferedSource;
 import okio.Okio;
 import okio.Sink;
@@ -33,7 +34,7 @@ import okio.Sink;
  * inSampleSize is calculated based on requiredWidth property. However can be adjusted if OOM occurs.
  * If any EXIF config is found - bitmap is transformed properly.
  */
-public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapWorkerResult> {
+public class BitmapLoadTask {
 
     private static final String TAG = "BitmapWorkerTask";
 
@@ -41,7 +42,7 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
 
     private final WeakReference<Context> mContext;
     private Uri mInputUri;
-    private Uri mOutputUri;
+    private final Uri mOutputUri;
     private final int mRequiredWidth;
     private final int mRequiredHeight;
 
@@ -65,8 +66,10 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
     }
 
     public BitmapLoadTask(@NonNull Context context,
-                          @NonNull Uri inputUri, @Nullable Uri outputUri,
-                          int requiredWidth, int requiredHeight,
+                          @NonNull Uri inputUri,
+                          @Nullable Uri outputUri,
+                          int requiredWidth,
+                          int requiredHeight,
                           BitmapLoadCallback loadCallback) {
         mContext = new WeakReference<>(context);
         mInputUri = inputUri;
@@ -76,9 +79,14 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
         mBitmapLoadCallback = loadCallback;
     }
 
-    @Override
-    @NonNull
-    protected BitmapWorkerResult doInBackground(Void... params) {
+    public void execute() {
+        AppExecutors.getInstance().tasksThread().execute(() -> {
+            final BitmapWorkerResult result = doInBackground();
+            AppExecutors.getInstance().mainThread().execute(() -> onPostExecute(result));
+        });
+    }
+
+    private BitmapWorkerResult doInBackground() {
         Context context = mContext.get();
         if (context == null) {
             return new BitmapWorkerResult(new NullPointerException("context is null"));
@@ -108,7 +116,8 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
                 try {
                     decodeSampledBitmap = BitmapFactory.decodeStream(stream, null, options);
                     if (options.outWidth == -1 || options.outHeight == -1) {
-                        return new BitmapWorkerResult(new IllegalArgumentException("Bounds for bitmap could not be retrieved from the Uri: [" + mInputUri + "]"));
+                        return new BitmapWorkerResult(
+                                new IllegalArgumentException("Bounds for bitmap could not be retrieved from the Uri: [" + mInputUri + "]"));
                     }
                 } finally {
                     BitmapLoadUtils.close(stream);
@@ -183,10 +192,12 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
         Response response = null;
         try {
             Request request = new Request.Builder()
-                .url(inputUri.toString())
-                .build();
+                    .url(inputUri.toString())
+                    .build();
             response = client.newCall(request).execute();
-            source = response.body().source();
+            final ResponseBody responseBody = response.body();
+            if (responseBody == null) return;
+            source = responseBody.source();
 
             OutputStream outputStream = context.getContentResolver().openOutputStream(outputUri);
             if (outputStream != null) {
@@ -209,8 +220,7 @@ public class BitmapLoadTask extends AsyncTask<Void, Void, BitmapLoadTask.BitmapW
         }
     }
 
-    @Override
-    protected void onPostExecute(@NonNull BitmapWorkerResult result) {
+    private void onPostExecute(@NonNull BitmapWorkerResult result) {
         if (result.mBitmapWorkerException == null) {
             mBitmapLoadCallback.onBitmapLoaded(result.mBitmapResult, result.mExifInfo, mInputUri, mOutputUri);
         } else {
