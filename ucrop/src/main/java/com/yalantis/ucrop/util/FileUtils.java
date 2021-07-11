@@ -28,7 +28,8 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Log;
 
-import java.io.File;
+import androidx.annotation.NonNull;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -36,8 +37,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.util.Locale;
-
-import androidx.annotation.NonNull;
 
 /**
  * @author Peli
@@ -111,7 +110,7 @@ public class FileUtils {
 
         try {
             cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs,
-                    null);
+                                                        null);
             if (cursor != null && cursor.moveToFirst()) {
                 final int column_index = cursor.getColumnIndexOrThrow(column);
                 return cursor.getString(column_index);
@@ -213,32 +212,6 @@ public class FileUtils {
     }
 
     /**
-     * Copies one file into the other with the given paths.
-     * In the event that the paths are the same, trying to copy one file to the other
-     * will cause both files to become null.
-     * Simply skipping this step if the paths are identical.
-     *
-     * @param pathFrom Represents the source file
-     * @param pathTo Represents the destination file
-     */
-    public static void copyFile(@NonNull String pathFrom, @NonNull String pathTo) throws IOException {
-        if (pathFrom.equalsIgnoreCase(pathTo)) {
-            return;
-        }
-
-        FileChannel outputChannel = null;
-        FileChannel inputChannel = null;
-        try {
-            inputChannel = new FileInputStream(new File(pathFrom)).getChannel();
-            outputChannel = new FileOutputStream(new File(pathTo)).getChannel();
-            inputChannel.transferTo(0, inputChannel.size(), outputChannel);
-        } finally {
-            if (inputChannel != null) inputChannel.close();
-            if (outputChannel != null) outputChannel.close();
-        }
-    }
-
-    /**
      * Copies one file into the other with the given Uris.
      * In the event that the Uris are the same, trying to copy one file to the other
      * will cause both files to become null.
@@ -246,30 +219,24 @@ public class FileUtils {
      *
      * @param context The context from which to require the {@link android.content.ContentResolver}
      * @param uriFrom Represents the source file
-     * @param uriTo Represents the destination file
+     * @param uriTo   Represents the destination file
      */
     public static void copyFile(@NonNull Context context, @NonNull Uri uriFrom, @NonNull Uri uriTo) throws IOException {
         if (uriFrom.equals(uriTo)) {
             return;
         }
 
-        InputStream isFrom = null;
-        OutputStream osTo = null;
-        try {
-            isFrom = context.getContentResolver().openInputStream(uriFrom);
-            osTo = context.getContentResolver().openOutputStream(uriTo);
+        try (InputStream isFrom = context.getContentResolver().openInputStream(uriFrom);
+             OutputStream osTo = context.getContentResolver().openOutputStream(uriTo)) {
 
             if (isFrom instanceof FileInputStream && osTo instanceof FileOutputStream) {
-                FileChannel inputChannel = ((FileInputStream)isFrom).getChannel();
-                FileChannel outputChannel = ((FileOutputStream)osTo).getChannel();
+                FileChannel inputChannel = ((FileInputStream) isFrom).getChannel();
+                FileChannel outputChannel = ((FileOutputStream) osTo).getChannel();
                 inputChannel.transferTo(0, inputChannel.size(), outputChannel);
             } else {
                 throw new IllegalArgumentException("The input or output URI don't represent a file. " +
-                                                   "uCrop requires then to represent files in order to work properly.");
+                                                           "uCrop requires then to represent files in order to work properly.");
             }
-        } finally {
-            if (isFrom != null) isFrom.close();
-            if (osTo != null) osTo.close();
         }
     }
 

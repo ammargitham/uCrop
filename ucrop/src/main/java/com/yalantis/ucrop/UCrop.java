@@ -4,15 +4,10 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
-
-import com.yalantis.ucrop.model.AspectRatio;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Locale;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
@@ -20,8 +15,13 @@ import androidx.annotation.FloatRange;
 import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+
+import com.yalantis.ucrop.model.AspectRatio;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -34,7 +34,7 @@ public class UCrop {
     public static final int RESULT_ERROR = 96;
     public static final int MIN_SIZE = 10;
 
-    private static final String EXTRA_PREFIX = BuildConfig.APPLICATION_ID;
+    private static final String EXTRA_PREFIX = BuildConfig.LIBRARY_PACKAGE_NAME;
 
     public static final String EXTRA_INPUT_URI = EXTRA_PREFIX + ".InputUri";
     public static final String EXTRA_OUTPUT_URI = EXTRA_PREFIX + ".OutputUri";
@@ -43,6 +43,8 @@ public class UCrop {
     public static final String EXTRA_OUTPUT_IMAGE_HEIGHT = EXTRA_PREFIX + ".ImageHeight";
     public static final String EXTRA_OUTPUT_OFFSET_X = EXTRA_PREFIX + ".OffsetX";
     public static final String EXTRA_OUTPUT_OFFSET_Y = EXTRA_PREFIX + ".OffsetY";
+    public static final String EXTRA_IMAGE_MATRIX_VALUES = EXTRA_PREFIX + ".ImageMatrixValues";
+    public static final String EXTRA_CROP_RECT = EXTRA_PREFIX + ".CropRect";
     public static final String EXTRA_ERROR = EXTRA_PREFIX + ".Error";
 
     public static final String EXTRA_ASPECT_RATIO_X = EXTRA_PREFIX + ".AspectRatioX";
@@ -69,6 +71,17 @@ public class UCrop {
         mCropOptionsBundle = new Bundle();
         mCropOptionsBundle.putParcelable(EXTRA_INPUT_URI, source);
         mCropOptionsBundle.putParcelable(EXTRA_OUTPUT_URI, destination);
+    }
+
+    /**
+     * @param imageMatrixValues values of previous image matrix before crop.
+     * @param cropRect          of previous edit.
+     * @author azri92
+     */
+    public UCrop withSavedState(@NonNull float[] imageMatrixValues, @NonNull RectF cropRect) {
+        mCropOptionsBundle.putFloatArray(EXTRA_IMAGE_MATRIX_VALUES, imageMatrixValues);
+        mCropOptionsBundle.putParcelable(EXTRA_CROP_RECT, cropRect);
+        return this;
     }
 
     /**
@@ -257,6 +270,7 @@ public class UCrop {
         public static final String EXTRA_CROP_GRID_ROW_COUNT = EXTRA_PREFIX + ".CropGridRowCount";
         public static final String EXTRA_CROP_GRID_COLUMN_COUNT = EXTRA_PREFIX + ".CropGridColumnCount";
         public static final String EXTRA_CROP_GRID_COLOR = EXTRA_PREFIX + ".CropGridColor";
+        public static final String EXTRA_CROP_GRID_CORNER_COLOR = EXTRA_PREFIX + ".CropGridCornerColor";
         public static final String EXTRA_CROP_GRID_STROKE_WIDTH = EXTRA_PREFIX + ".CropGridStrokeWidth";
 
         public static final String EXTRA_TOOL_BAR_COLOR = EXTRA_PREFIX + ".ToolbarColor";

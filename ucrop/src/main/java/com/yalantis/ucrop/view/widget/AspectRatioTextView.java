@@ -12,16 +12,16 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.Gravity;
 
+import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
+import androidx.appcompat.widget.AppCompatTextView;
+import androidx.core.content.ContextCompat;
+
 import com.yalantis.ucrop.R;
 import com.yalantis.ucrop.model.AspectRatio;
 import com.yalantis.ucrop.view.CropImageView;
 
 import java.util.Locale;
-
-import androidx.annotation.ColorInt;
-import androidx.annotation.NonNull;
-import androidx.appcompat.widget.AppCompatTextView;
-import androidx.core.content.ContextCompat;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -103,7 +103,6 @@ public class AspectRatioTextView extends AppCompatTextView {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private void init(@NonNull TypedArray a) {
         setGravity(Gravity.CENTER_HORIZONTAL);
 
@@ -157,12 +156,19 @@ public class AspectRatioTextView extends AppCompatTextView {
         }
     }
 
+    public String getTitle() {
+        return mAspectRatioTitle;
+    }
+
     private void setTitle() {
         if (!TextUtils.isEmpty(mAspectRatioTitle)) {
             setText(mAspectRatioTitle);
         } else {
-            setText(String.format(Locale.US, "%d:%d", (int) mAspectRatioX, (int) mAspectRatioY));
+            final String text = String.format(Locale.US, "%d:%d", (int) mAspectRatioX, (int) mAspectRatioY);
+            if (TextUtils.isEmpty(mAspectRatioTitle)) {
+                mAspectRatioTitle = text;
+            }
+            setText(text);
         }
     }
-
 }

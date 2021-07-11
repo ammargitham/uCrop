@@ -1,5 +1,6 @@
 package com.yalantis.ucrop.model;
 
+import android.graphics.Matrix;
 import android.graphics.RectF;
 
 /**
@@ -7,14 +8,16 @@ import android.graphics.RectF;
  */
 public class ImageState {
 
-    private RectF mCropRect;
-    private RectF mCurrentImageRect;
+    private final RectF mCropRect;
+    private final RectF mCurrentImageRect;
+    private final Matrix currentImageMatrix;
+    private final float mCurrentScale;
+    private final float mCurrentAngle;
 
-    private float mCurrentScale, mCurrentAngle;
-
-    public ImageState(RectF cropRect, RectF currentImageRect, float currentScale, float currentAngle) {
+    public ImageState(RectF cropRect, RectF currentImageRect, Matrix currentImageMatrix, float currentScale, float currentAngle) {
         mCropRect = cropRect;
         mCurrentImageRect = currentImageRect;
+        this.currentImageMatrix = currentImageMatrix;
         mCurrentScale = currentScale;
         mCurrentAngle = currentAngle;
     }
@@ -25,6 +28,10 @@ public class ImageState {
 
     public RectF getCurrentImageRect() {
         return mCurrentImageRect;
+    }
+
+    public Matrix getCurrentImageMatrix() {
+        return currentImageMatrix;
     }
 
     public float getCurrentScale() {
